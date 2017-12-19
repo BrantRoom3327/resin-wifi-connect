@@ -9,9 +9,15 @@ $(function(){
 			});
 		}
 	});
-
 	$('#connect-form').submit(function(ev){
 		$.post('/connect', $('#connect-form').serialize(), function(data){
+			$('.before-submit').hide();
+			$('#submit-message').removeClass('hidden');
+		});
+		ev.preventDefault();
+	});
+	$('#cloudurl-form').submit(function(ev){
+		$.post('/cloudurl', $('#cloudurl-form').serialize(), function(data){
 			$('.before-submit').hide();
 			$('#submit-message').removeClass('hidden');
 		});

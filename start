@@ -1,5 +1,6 @@
 #!/bin/bash
 export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
-export PORTAL_PASSPHRASE=bacon
-export PORTAL_SSID=bacon
+#export PORTAL_PASSPHRASE=bacon
+#export PORTAL_SSID=bacon
+
 target/x86_64-unknown-linux-gnu/debug/wifi-connect --clear=false --portal-interface=wlp2s0 &

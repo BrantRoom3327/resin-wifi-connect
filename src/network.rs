@@ -5,6 +5,10 @@ use std::sync::mpsc::{Sender, channel};
 use std::error::Error;
 use std::net::Ipv4Addr;
 
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::Write as WriteFile;
+
 use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connection, AccessPoint,
                       ConnectionState, ServiceState, Connectivity};
 
@@ -16,6 +20,7 @@ use server::start_server;
 pub enum NetworkCommand {
     Activate,
     Connect { ssid: String, passphrase: String },
+    SetCloudURL { url: String },
 }
 
 pub enum NetworkCommandResponse {
@@ -53,13 +58,13 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
         };
 
     let dnsmasq = start_dnsmasq(config, &device).unwrap();
-
     let (server_tx, server_rx) = channel();
     let (network_tx, network_rx) = channel();
 
     let exit_tx_server = exit_tx.clone();
     let gateway = config.gateway;
     let ui_path = config.ui_path.clone();
+
     thread::spawn(move || {
         start_server(gateway, server_rx, network_tx, exit_tx_server, &ui_path);
     });
@@ -70,6 +75,7 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
             Err(e) => {
                 // Sleep for a second, so that other threads may log error info.
                 thread::sleep(Duration::from_secs(1));
+
                 return exit_with_error(
                     exit_tx,
                     dnsmasq,
@@ -99,6 +105,21 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
                         ),
                     );
                 }
+            },
+            NetworkCommand::SetCloudURL { url } => {
+                println!("The url to safe is {}", url);
+
+                // touch the file
+                match OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .open("cloudpath.txt") {
+                    Ok(_) => Ok(()),
+                    Err(f) => Err(f),
+                };
+            
+                let mut f = File::open("cloudurl.txt").expect("Unable to open file");
+                f.write_all(url.as_bytes()).expect("Unable to write to file");
             },
             NetworkCommand::Connect {
                 ssid,
@@ -346,7 +367,8 @@ pub fn find_device(manager: &NetworkManager, interface: &Option<String>) -> Resu
             info!("Targeted WiFi device: {}", interface);
             Ok(device)
         } else {
-            Err(format!("Not a WiFi device: {}", interface))
+            println!("FAILED: devtype {:?}", *device.device_type() );
+            Err(format!("Not a WiFi device: {} ", interface))
         }
     } else {
         let devices = manager.get_devices()?;

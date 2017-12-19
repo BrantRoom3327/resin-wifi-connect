@@ -136,6 +136,7 @@ pub fn start_server(
     let mut router = Router::new();
     router.get("/", Static::new(ui_path), "index");
     router.get("/ssid", ssid, "ssid");
+    router.post("/cloudurl", cloudurl, "cloudurl");
     router.post("/connect", connect, "connect");
 
     let mut assets = Mount::new();
@@ -210,7 +211,6 @@ fn connect(req: &mut Request) -> IronResult<Response> {
     debug!("Incoming `connect` to access point `{}` request", ssid);
 
     let request_state = get_request_state!(req);
-
     let command = NetworkCommand::Connect {
         ssid: ssid,
         passphrase: passphrase,
@@ -225,3 +225,29 @@ fn connect(req: &mut Request) -> IronResult<Response> {
 
     Ok(Response::with(status::Ok))
 }
+
+fn cloudurl(req: &mut Request) -> IronResult<Response> {
+    let cloudurl = {
+        let params = get_request_ref!(req, Params, "Getting request params failed");
+        let url = get_param!(params, "cloudurl", String);
+        (url)
+    };
+
+    debug!("Incoming `cloudurl` -> `{}` ", cloudurl);
+
+    let request_state = get_request_state!(req);
+
+    let command = NetworkCommand::SetCloudURL {
+        url: cloudurl,
+    };
+
+    if let Err(err) = request_state.network_tx.send(command) {
+        exit_with_error!(
+            request_state,
+            format!("Sending NetworkCommand::Connect failed: {}", err.description())
+        );
+    }
+
+    Ok(Response::with(status::Ok))
+}
+
