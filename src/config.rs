@@ -1,3 +1,8 @@
+extern crate serde;
+extern crate serde_json;
+
+use serde_json::Error;
+
 use clap::{Arg, App};
 
 use std::env;
@@ -6,11 +11,17 @@ use std::str::FromStr;
 use std::path::PathBuf;
 use std::ffi::OsStr;
 
+use std::io;
+use std::io::prelude::*;
+use std::fs::File;
+
 const DEFAULT_GATEWAY: &str = "192.168.42.1";
 const DEFAULT_DHCP_RANGE: &str = "192.168.42.2,192.168.42.254";
 const DEFAULT_SSID: &str = "WiFi Connect";
 const DEFAULT_TIMEOUT_MS: &str = "15000";
 const DEFAULT_UI_PATH: &str = "public";
+pub const AUTH_FILE: &str = "auth.json";
+pub const CFG_FILE: &str = "cfg.json";
 
 pub struct Config {
     pub interface: Option<String>,
@@ -21,6 +32,17 @@ pub struct Config {
     pub dhcp_range: String,
     pub timeout: u64,
     pub ui_path: PathBuf,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Auth{
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CloudURL{
+    url: String,
 }
 
 pub fn get_config() -> Config {
@@ -202,4 +224,19 @@ fn get_install_ui_path() -> Option<PathBuf> {
     }
 
     None
+}
+
+pub fn load_auth(file_path: &str) -> Result<Auth, Error> {
+
+    let mut data = String::new();
+    let mut f = File::open(file_path).expect("Can't open file");
+    f.read_to_string(&mut data).expect("Can't read file");
+
+    //parse json and check it.
+    let auth: Auth = serde_json::from_str(&data[..])?;
+
+    // Do things just like with any other Rust data structure.
+    //println!("username {} pass {}", p.username, p.password);
+
+    Ok(auth)
 }

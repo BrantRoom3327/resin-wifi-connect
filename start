@@ -1,6 +1,7 @@
 #!/bin/bash
-export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
-#export PORTAL_PASSPHRASE=bacon
-#export PORTAL_SSID=bacon
+DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket target/x86_64-unknown-linux-gnu/debug/wifi-connect --clear=false --portal-interface=wlp2s0
+echo "wifi connect exited"
+while true; do
+    sleep 100
+done
 
-target/x86_64-unknown-linux-gnu/debug/wifi-connect --clear=false --portal-interface=wlp2s0 &

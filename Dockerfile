@@ -1,12 +1,15 @@
 FROM fedora:latest
 
-RUN yum update; yum install vim dnsmasq bash NetworkManager NetworkManager-wifi dbus wireless-tools -y;
+RUN yum update; yum install vim dnsmasq bash NetworkManager NetworkManager-wifi dbus wireless-tools net-tools -y;
 
 # Install jq
 RUN JQ_URL="https://circle-downloads.s3.amazonaws.com/circleci-images/cache/linux-amd64/jq-latest" \
     && curl --silent --show-error --location --fail --retry 3 --output /usr/bin/jq $JQ_URL \
     && chmod +x /usr/bin/jq \
     && jq --version
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+ENV PATH=/root/.cargo/bin:$PATH
 
 VOLUME /work
 WORKDIR /work

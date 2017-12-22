@@ -14,6 +14,9 @@ extern crate serde_json;
 extern crate persistent;
 extern crate params;
 
+#[macro_use]
+extern crate serde_derive;
+
 mod config;
 mod network;
 mod server;
@@ -26,8 +29,10 @@ use std::thread;
 use std::sync::mpsc::{channel, Sender};
 
 use config::get_config;
-use network::{process_network_commands, handle_existing_wifi_connections,
-              start_network_manager_service};
+//use network::{process_network_commands, handle_existing_wifi_connections,
+//              start_network_manager_service};
+
+use network::{process_network_commands2};
 
 pub type ExitResult = Result<(), String>;
 
@@ -40,13 +45,13 @@ fn main() {
 
     let config = get_config();
 
-    start_network_manager_service();
+    //start_network_manager_service();
 
-    handle_existing_wifi_connections(config.clear, &config.interface);
+//    handle_existing_wifi_connections(config.clear, &config.interface);
 
     let (exit_tx, exit_rx) = channel();
 
-    thread::spawn(move || { process_network_commands(&config, &exit_tx); });
+    thread::spawn(move || { process_network_commands2(&config, &exit_tx); });
 
     match exit_rx.recv() {
         Ok(result) => {

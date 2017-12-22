@@ -6,18 +6,32 @@ use std::net::Ipv4Addr;
 use serde_json;
 use path::PathBuf;
 use iron::prelude::*;
-use iron::{Iron, Request, Response, IronResult, status, typemap, IronError, Url, AfterMiddleware,
-           headers};
+use iron::{Iron, Request, Response, IronResult, status, typemap, IronError, 
+            Url, AfterMiddleware, headers};
 use iron::modifiers::Redirect;
+use iron::mime::Mime;
+
 use router::Router;
 use staticfile::Static;
 use mount::Mount;
 use persistent::Write;
 use params::{Params, FromValue};
 
+use config::CFG_FILE;
+use config::AUTH_FILE;
+use config::load_auth;
+use config::Auth;
+
+use std::fs::OpenOptions;
+use std::io::Write as WriteFile;
+use std::fs::File;
+use std::env;
+
 use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
 
+
+#[derive(Debug)]
 struct RequestSharedState {
     gateway: Ipv4Addr,
     server_rx: Receiver<NetworkCommandResponse>,
@@ -133,10 +147,14 @@ pub fn start_server(
         exit_tx: exit_tx,
     };
 
+ //   rocket::ignite().mount("/hello", routes![hello]).launch();
+
     let mut router = Router::new();
     router.get("/", Static::new(ui_path), "index");
     router.get("/ssid", ssid, "ssid");
-    router.post("/cloudurl", cloudurl, "cloudurl");
+    router.get("/config", getconfig, "config");
+
+    router.post("/auth", do_auth, "auth");
     router.post("/connect", connect, "connect");
 
     let mut assets = Mount::new();
@@ -149,7 +167,7 @@ pub fn start_server(
     chain.link(Write::<RequestSharedState>::both(request_state));
     chain.link_after(RedirectMiddleware);
 
-    let address = format!("{}:80", gateway_clone);
+    let address = format!("{}:8080", gateway_clone);
 
     info!("Starting HTTP server on {}", &address);
 
@@ -201,6 +219,7 @@ fn ssid(req: &mut Request) -> IronResult<Response> {
 }
 
 fn connect(req: &mut Request) -> IronResult<Response> {
+    println!("connect() called with a request");
     let (ssid, passphrase) = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
         let ssid = get_param!(params, "ssid", String);
@@ -226,28 +245,59 @@ fn connect(req: &mut Request) -> IronResult<Response> {
     Ok(Response::with(status::Ok))
 }
 
-fn cloudurl(req: &mut Request) -> IronResult<Response> {
+fn setconfig(req: &mut Request) -> IronResult<Response> {
     let cloudurl = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
         let url = get_param!(params, "cloudurl", String);
         (url)
     };
 
-    debug!("Incoming `cloudurl` -> `{}` ", cloudurl);
-
-    let request_state = get_request_state!(req);
-
-    let command = NetworkCommand::SetCloudURL {
-        url: cloudurl,
-    };
-
-    if let Err(err) = request_state.network_tx.send(command) {
-        exit_with_error!(
-            request_state,
-            format!("Sending NetworkCommand::Connect failed: {}", err.description())
-        );
-    }
+    println!("Incoming you suck cloudurl -> {} ", cloudurl);
 
     Ok(Response::with(status::Ok))
 }
 
+fn getconfig(req: &mut Request) -> IronResult<Response> {
+    println!("cur dir {:?}", env::current_exe().unwrap());
+
+    let content_type = "text/html".parse::<Mime>().unwrap();
+    let file = File::open("/home/loop/resin-wifi-connect/public/config.html").unwrap();
+    Ok(Response::with((content_type, status::Ok, file)))
+}
+
+fn do_auth(req: &mut Request) -> IronResult<Response> {
+    let (user, pass) = {
+        let params = get_request_ref!(req, Params, "Getting request params failed");
+        let user = get_param!(params, "username", String);
+        let pass = get_param!(params, "password", String);
+        (user, pass)
+    };
+
+    let creds = load_auth(AUTH_FILE).expect("Auth failed");
+
+    println!("Incoming user {} pass {}", user, pass);
+
+    let mut auth_ok = false;
+    if user == creds.username &&
+       pass == creds.password {
+        println!("Auth ok");
+        auth_ok = true;
+    }
+
+    let url = Url::parse("http://192.168.1.169:8080/config").unwrap();
+    let errorurl = Url::parse("http://www.google.com").unwrap();
+
+    // This works!  use status::Found for return on redirect
+
+    let resp = match auth_ok {
+        true => {
+            Response::with((status::Found, Redirect(url.clone())))
+        },
+        false => {
+            Response::with((status::Unauthorized, "Bad login"))
+        }
+    };
+
+    println!("resp is {:?}", resp);
+    Ok(resp)
+}
