@@ -17,10 +17,8 @@ use mount::Mount;
 use persistent::Write;
 use params::{Params, FromValue};
 
-use config::CFG_FILE;
-use config::AUTH_FILE;
-use config::load_auth;
-use config::Auth;
+use config::{CFG_FILE, AUTH_FILE, SERVER_PORT, Auth};
+use config::{get_http_address, load_auth};
 
 use std::fs::OpenOptions;
 use std::io::Write as WriteFile;
@@ -30,7 +28,6 @@ use std::env;
 use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
 
-const SERVER_PORT: i32 = 8080;
 
 #[derive(Debug)]
 struct RequestSharedState {
@@ -140,7 +137,7 @@ pub fn start_server(
     ui_path: &PathBuf,
 ) {
     let exit_tx_clone = exit_tx.clone();
-    let gateway_clone = gateway;
+    //let gateway_clone = gateway;
     let request_state = RequestSharedState {
         gateway: gateway,
         server_rx: server_rx,
@@ -151,10 +148,14 @@ pub fn start_server(
     let mut router = Router::new();
     router.get("/", Static::new(ui_path), "index");
     router.get("/ssid", ssid, "ssid");
-    router.get("/config", get_config, "config");
 
-    router.post("/auth", do_auth, "auth");
     router.post("/connect", connect, "connect");
+
+    // kcf routes
+    router.post("/auth", do_auth, "auth");
+    router.get("/config", get_config, "config");
+    router.post("/setdatasource", set_data_source, "set_config");
+    // end kcf routes
 
     let mut assets = Mount::new();
     assets.mount("/", router);
@@ -166,7 +167,7 @@ pub fn start_server(
     chain.link(Write::<RequestSharedState>::both(request_state));
     chain.link_after(RedirectMiddleware);
 
-    let address = format!("{}:{}", gateway_clone, SERVER_PORT);
+    let address = format!("{}:{}", gateway, SERVER_PORT);
 
     info!("Starting HTTP server on {}", &address);
 
@@ -244,28 +245,32 @@ fn connect(req: &mut Request) -> IronResult<Response> {
     Ok(Response::with(status::Ok))
 }
 
-
 // 
 // KCF specific
 //
 
-fn set_config(req: &mut Request) -> IronResult<Response> {
-    let cloudurl = {
+fn set_data_source(req: &mut Request) -> IronResult<Response> {
+    let destinationaddress = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
-        let url = get_param!(params, "cloudurl", String);
-        (url)
+        let address = get_param!(params, "destinationaddress", String);
+        (address)
     };
 
-    println!("Incoming cloudurl -> {} ", cloudurl);
+    println!("Incoming address -> {} ", destinationaddress);
+
+    // need to write this all to a file.
 
     Ok(Response::with(status::Ok))
 }
 
 pub fn get_config(req: &mut Request) -> IronResult<Response> {
-    println!("cur dir {:?}", env::current_exe().unwrap());
+    let mut path = env::current_dir().unwrap();
+    path.push("public/config.html");
+
+    println!("send file {:?}", path);
 
     let content_type = "text/html".parse::<Mime>().unwrap();
-    let file = File::open("/home/loop/resin-wifi-connect/public/config.html").unwrap();
+    let file = File::open(path).unwrap();
     Ok(Response::with((content_type, status::Ok, file)))
 }
 
@@ -284,11 +289,15 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
     let mut auth_ok = false;
     if user == creds.username &&
        pass == creds.password {
-        println!("Auth ok");
         auth_ok = true;
     }
 
-    let url = Url::parse("http://192.168.1.169:8080/config").unwrap();
+    // parse the ip based on the hardcoded gateway ip
+    let mut address = get_http_address();
+    address.push_str("/config");
+    println!("Config file is {}", address);
+
+    let url = Url::parse(&address).unwrap();
     let errorurl = Url::parse("http://www.google.com").unwrap();
 
     // This works!  use status::Found for return on redirect

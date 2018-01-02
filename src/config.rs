@@ -15,7 +15,8 @@ use std::io;
 use std::io::prelude::*;
 use std::fs::File;
 
-const DEFAULT_GATEWAY: &str = "192.168.42.1";
+pub const SERVER_PORT: i32 = 8080;
+const DEFAULT_GATEWAY: &str = "192.168.1.148";
 const DEFAULT_DHCP_RANGE: &str = "192.168.42.2,192.168.42.254";
 const DEFAULT_SSID: &str = "WiFi Connect";
 const DEFAULT_TIMEOUT_MS: &str = "15000";
@@ -239,4 +240,12 @@ pub fn load_auth(file_path: &str) -> Result<Auth, Error> {
     //println!("username {} pass {}", p.username, p.password);
 
     Ok(auth)
+}
+
+pub fn get_http_address() -> String {
+    let mut server : String = "http://".to_owned();
+    server.push_str(DEFAULT_GATEWAY);
+    server.push_str(":");
+    server.push_str(&SERVER_PORT.to_string());
+    server
 }

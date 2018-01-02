@@ -7,14 +7,14 @@
 		<!-- Latest compiled and minified CSS -->
 		<link rel="stylesheet" href="css/bootstrap.min.css">
 
-		<!-- jQuery library -->
-		<script src="js/jquery.min.js"></script>
-
 		<!-- Latest compiled JavaScript -->
 		<script src="js/bootstrap.min.js"></script>
+		<script src="js/jquery.min.js" />
+		<script src="js/jquery-ui.min.js"></script>
 
-		<script src="/js/index.js"></script>
-		<link rel="shortcut icon" href="/img/favicon.png">
+		<script src="js/index.js"></script>
+
+		<link rel="shortcut icon" href="img/favicon.png">
 
 		<style>
 			body{padding-top: 80px;}
@@ -26,39 +26,66 @@
 		<nav class="navbar navbar-inverse navbar-fixed-top">
 			<div class="container">
 				<div class="navbar-header">
-					<a class="navbar-brand"><img id="logo" height=30 src="/img/logo.svg"></img></a>
+					<a class="navbar-brand"><img id="logo" height=30 src="/img/SD-logo.ico"></img></a>
 					<a class="navbar-brand">Smart Diagnostics</a>
 				</div>
 			</div>
 		</nav>
 
-		<div class="container">
-			<div class="container-fluid">
-				<div class="row">
-					<div class="col-sm-12">
-						<div id="MainContentOuter">
-							<div id="MainContentInner">
-								<div class="col-sm-4">
-									<div class="panel panel-default">
-										<div class="panel-heading"><h3 class="panel-title"><strong>Sign In </strong></h3></div>
-										<div class="panel-body">
-											<div class="form-group">
-												<label>Username</label>
-												<input class="form-control" type="text" name="username" id="username">
-											</div>
-											<div class="form-group">
-												<label for="UserDto_Password">Password</label>
-												<input class="form-control" id="password" type="password" name="password">
-											</div>
-											<button id="Login" tabindex="3" class="btn btn-sm btn-primary" type="submit">Sign in</button>
-										</div>
-									</div>
-								</div>
-							</div>
-						</div>
+
+		<div class="container theme-showcase" role="main">
+			<div class="page-header">
+				<img class="pull-right" height="20%" width="14%" src="/img/Smart_Diagnostics_Logo.png"></img>
+				<h1>Collector Configuration</h1>
+			</div>
+	
+			<form action="/setdatasource" method="post" enctype="application/x-www-form-urlencoded">
+				<div class="row col-xs-12">
+					<div class="col-xs-2"><label>Data Destination</label></div>
+					<div class="input-group col-xs-10" id="data-source-type" class="col-md-3" name="data-source-type">
+						&nbsp;&nbsp;&nbsp;&nbsp;
+							<input type="radio" name="data-source" id="Cloud" >Cloud&nbsp;
+							<input type="radio" name="data-source" id="Network" checked="checked" >Network&nbsp;
+					<input type="hidden" id="selected-data-source" name="selected-data-source">
 					</div>
 				</div>
-			</div>
+				<br>
+	
+				<div class="row network col-xs-12">
+					<div class="col-md-2"><label for="destinationAddress">Network Destination</label></div>
+					<div class="col-xs-10">
+						<input type="text" class="form-control" name="destinationaddress" value="">
+							example: http://host-name-here:52000 or http://ip-address-here:52000
+					</div>
+				</div>
+				<button type="submit" id="updateDataSource" class='btn btn-success col-lg-3 col-lg-offset-3'>Update</button>
+			</form>
 		</div>
+		
+		<script>
+			 $(function() {
+				$(".default-interface").addClass('active');
+				$('.interface').on('click', function() {
+					$('#ip-type').show();
+					$(this).addClass('active').siblings().removeClass('active');
+				});
+			 });
+		 </script>
+	 <script>
+		 $(function() {
+			 ChooseDataSource('Network');
+			 function ChooseDataSource(checked){
+				 if(checked.toUpperCase() == 'NETWORK') {
+					 $('.network').show();
+				 } else {
+					 $('.network').hide();
+				 }
+				 $("#selected-data-source").val(checked);
+			 }
+			 $("input[name='data-source']").on('click', function() {
+				 ChooseDataSource($(this).attr("id"));
+			 });
+		 });
+	 </script>
 	</body>
 </html>
