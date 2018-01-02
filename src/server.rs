@@ -30,6 +30,7 @@ use std::env;
 use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
 
+const SERVER_PORT: i32 = 8080;
 
 #[derive(Debug)]
 struct RequestSharedState {
@@ -147,12 +148,10 @@ pub fn start_server(
         exit_tx: exit_tx,
     };
 
- //   rocket::ignite().mount("/hello", routes![hello]).launch();
-
     let mut router = Router::new();
     router.get("/", Static::new(ui_path), "index");
     router.get("/ssid", ssid, "ssid");
-    router.get("/config", getconfig, "config");
+    router.get("/config", get_config, "config");
 
     router.post("/auth", do_auth, "auth");
     router.post("/connect", connect, "connect");
@@ -167,7 +166,7 @@ pub fn start_server(
     chain.link(Write::<RequestSharedState>::both(request_state));
     chain.link_after(RedirectMiddleware);
 
-    let address = format!("{}:8080", gateway_clone);
+    let address = format!("{}:{}", gateway_clone, SERVER_PORT);
 
     info!("Starting HTTP server on {}", &address);
 
@@ -245,19 +244,24 @@ fn connect(req: &mut Request) -> IronResult<Response> {
     Ok(Response::with(status::Ok))
 }
 
-fn setconfig(req: &mut Request) -> IronResult<Response> {
+
+// 
+// KCF specific
+//
+
+fn set_config(req: &mut Request) -> IronResult<Response> {
     let cloudurl = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
         let url = get_param!(params, "cloudurl", String);
         (url)
     };
 
-    println!("Incoming you suck cloudurl -> {} ", cloudurl);
+    println!("Incoming cloudurl -> {} ", cloudurl);
 
     Ok(Response::with(status::Ok))
 }
 
-fn getconfig(req: &mut Request) -> IronResult<Response> {
+pub fn get_config(req: &mut Request) -> IronResult<Response> {
     println!("cur dir {:?}", env::current_exe().unwrap());
 
     let content_type = "text/html".parse::<Mime>().unwrap();
@@ -265,7 +269,7 @@ fn getconfig(req: &mut Request) -> IronResult<Response> {
     Ok(Response::with((content_type, status::Ok, file)))
 }
 
-fn do_auth(req: &mut Request) -> IronResult<Response> {
+pub fn do_auth(req: &mut Request) -> IronResult<Response> {
     let (user, pass) = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
         let user = get_param!(params, "username", String);
@@ -288,7 +292,6 @@ fn do_auth(req: &mut Request) -> IronResult<Response> {
     let errorurl = Url::parse("http://www.google.com").unwrap();
 
     // This works!  use status::Found for return on redirect
-
     let resp = match auth_ok {
         true => {
             Response::with((status::Found, Redirect(url.clone())))
@@ -300,4 +303,8 @@ fn do_auth(req: &mut Request) -> IronResult<Response> {
 
     println!("resp is {:?}", resp);
     Ok(resp)
+}
+
+pub fn exit_with_error2(exit_tx: &Sender<ExitResult>, error: String) {
+    println!("failed a sender command err"); 
 }

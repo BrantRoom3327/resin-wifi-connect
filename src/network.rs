@@ -13,10 +13,11 @@ use config::Config;
 use dnsmasq::start_dnsmasq;
 use server::start_server;
 
+use server::exit_with_error2;
+
 pub enum NetworkCommand {
     Activate,
     Connect { ssid: String, passphrase: String },
-    SetCloudURL { url: String },
 }
 
 pub enum NetworkCommandResponse {
@@ -54,9 +55,6 @@ pub fn process_network_commands2(config: &Config, exit_tx: &Sender<ExitResult>) 
         match command {
             NetworkCommand::Activate => {
                println!("Got an activate network command"); 
-            },
-            NetworkCommand::SetCloudURL { url } => {
-                println!("The url to safe is {}", url);
             },
             NetworkCommand::Connect {
                 ssid,
@@ -106,7 +104,6 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
     let exit_tx_server = exit_tx.clone();
     let gateway = config.gateway;
     let ui_path = config.ui_path.clone();
-
     thread::spawn(move || {
         start_server(gateway, server_rx, network_tx, exit_tx_server, &ui_path);
     });
@@ -117,7 +114,6 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
             Err(e) => {
                 // Sleep for a second, so that other threads may log error info.
                 thread::sleep(Duration::from_secs(1));
-
                 return exit_with_error(
                     exit_tx,
                     dnsmasq,
@@ -147,9 +143,6 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
                         ),
                     );
                 }
-            },
-            NetworkCommand::SetCloudURL { url } => {
-                println!("The url to safe is {}", url);
             },
             NetworkCommand::Connect {
                 ssid,
@@ -397,8 +390,7 @@ pub fn find_device(manager: &NetworkManager, interface: &Option<String>) -> Resu
             info!("Targeted WiFi device: {}", interface);
             Ok(device)
         } else {
-            println!("FAILED: devtype {:?}", *device.device_type() );
-            Err(format!("Not a WiFi device: {} ", interface))
+            Err(format!("Not a WiFi device: {}", interface))
         }
     } else {
         let devices = manager.get_devices()?;
@@ -505,13 +497,6 @@ fn exit_with_error(
     error: String,
 ) {
     exit_with_result(exit_tx, dnsmasq, connection, ssid, Err(error));
-}
-
-fn exit_with_error2(
-    exit_tx: &Sender<ExitResult>,
-    error: String,
-) {
-    println!("failed a sender command err"); 
 }
 
 fn exit_ok(
