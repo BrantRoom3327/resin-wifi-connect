@@ -16,14 +16,12 @@ use mount::Mount;
 use persistent::Write;
 use params::{Params, FromValue};
 
-use config::{AUTH_FILE, SERVER_PORT, CONFIG_PAGE, SmartDiagnosticsConfig,
+use config::{AUTH_FILE, SERVER_PORT, HTTP_PUBLIC, CONFIG_TEMPLATE_NAME, SmartDiagnosticsConfig,
              get_http_address, load_auth, write_diagnostics_config, read_diagnostics_config};
 
 use std::fs::File;
-use std::env;
 
-use hbs::{HandlebarsEngine, DirectorySource};
-//use hbs::handlebars::{Handlebars, RenderContext, RenderError, Helper};
+use hbs::{Template, HandlebarsEngine, DirectorySource, MemorySource};
 
 use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
@@ -178,7 +176,7 @@ pub fn start_server(
 
     // handlebar style templates
     let mut hbse = HandlebarsEngine::new();
-    hbse.add(Box::new(DirectorySource::new("./public/", ".hbs")));
+    hbse.add(Box::new(DirectorySource::new(HTTP_PUBLIC, ".hbs")));
     if let Err(r) = hbse.reload() {
         panic!("{}", r);
     }
@@ -279,7 +277,9 @@ fn set_configuration(req: &mut Request) -> IronResult<Response> {
 
     println!("Incoming address -> {} ", destination_address);
 
-    // FIXME: Take a mutex or lock one shared one that exists.
+    //
+    // FIXME: Take a mutex.
+    //
     let mut cfg = match read_diagnostics_config() {
         Ok(cfg) => cfg,
         Err(err) => {
@@ -296,25 +296,26 @@ fn set_configuration(req: &mut Request) -> IronResult<Response> {
         }
     };
 
-    //FIXME:
-    // if we succeed, redirect back to the login screen...
+    //Consider redirecting to a status page showing you current configuration.
 
-    Ok(Response::with(status::Ok))
+    // redirect back to login page on success
+    let address = get_http_address();
+    let url = Url::parse(&address).unwrap();
+    Ok(Response::with((status::Found, Redirect(url.clone()))))
 }
 
 // can we close over the ironrequest and make our own method to inject file serving?
 pub fn get_configuration(req: &mut Request) -> IronResult<Response> {
-    let mut path = env::current_dir().unwrap();
-    path.push(CONFIG_PAGE);
+    let cfg = match read_diagnostics_config() {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            return Err(IronError::new(err, status::InternalServerError));
+        }
+    };
 
-    // TODO templating
-    //let template_data = get_template_data();
-    // TODO: read the cfg file at startup.  Use that config throughout.
-    //TODO: Need to read the config file and load the data
-
-    let content_type = "text/html".parse::<Mime>().unwrap();
-    let file = File::open(path).unwrap();
-    Ok(Response::with((content_type, status::Ok, file)))
+    let mut resp = Response::new();
+    resp.set_mut(Template::new(CONFIG_TEMPLATE_NAME, cfg)).set_mut(status::Ok);
+    Ok(resp)
 }
 
 pub fn do_auth(req: &mut Request) -> IronResult<Response> {
@@ -344,7 +345,7 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
         false => Response::with((status::Unauthorized, "Bad login"))
     };
 
-    println!("resp is {:?}", resp);
+    //println!("resp is {:?}", resp);
     Ok(resp)
 }
 

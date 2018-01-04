@@ -1,21 +1,15 @@
 extern crate serde;
 extern crate serde_json;
 
-use std::io::{ErrorKind};
-use std::io::Error as ErrorOriginal;
-use serde_json::Error;
+use std::io::{ErrorKind, Error};
 use serde_json::value::{Map, Value};
-//use handlebars::{to_json, Handlebars, Helper, JsonRender, RenderContext, RenderError};
 use handlebars::{to_json};
-
 use clap::{Arg, App};
-
 use std::env;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use std::path::PathBuf;
 use std::ffi::OsStr;
-
 use std::io::prelude::*;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -29,8 +23,10 @@ const DEFAULT_UI_PATH: &str = "public";
 pub const AUTH_FILE: &str = "auth.json";
 pub const CFG_FILE: &str = "cfg.json";
 
-// files being served
-pub const CONFIG_PAGE: &str = "public/config.hbs";
+// this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are strpped
+// for runtime
+pub const HTTP_PUBLIC: &str = "./public/";
+pub const CONFIG_TEMPLATE_NAME: &str = "config";
 
 pub struct Config {
     pub interface: Option<String>,
@@ -239,38 +235,36 @@ fn get_install_ui_path() -> Option<PathBuf> {
 
 pub fn load_auth(file_path: &str) -> Result<Auth, Error> {
     let mut data = String::new();
-    let mut f = File::open(file_path).expect("Can't open file");
-    f.read_to_string(&mut data).expect("Can't read file");
+    let mut f = File::open(file_path)?;
+    f.read_to_string(&mut data)?;
     let auth: Auth = serde_json::from_str(&data[..])?;
     Ok(auth)
 }
 
 pub fn read_diagnostics_config() -> Result<SmartDiagnosticsConfig, Error> {
     let mut data = String::new();
-    let mut f = File::open(CFG_FILE).expect("Can't open file");
-    f.read_to_string(&mut data).expect("Can't read file");
+    let mut f = File::open(CFG_FILE)?;
+    f.read_to_string(&mut data)?;
     let cfg: SmartDiagnosticsConfig = serde_json::from_str(&data[..])?;
     Ok(cfg)
 }
 
-pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), ErrorOriginal> {
+pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), Error> {
 
     let mut f = match OpenOptions::new().write(true).truncate(true).open(CFG_FILE) {
         Ok(f) => f,
-        Err(e) => { return Err(ErrorOriginal::new(ErrorKind::Other, "Failed to open config file!")); }
+        Err(e) => { return Err(Error::new(ErrorKind::Other, "Failed to open config file!")); }
     };
 
     let data = match serde_json::to_string(&config) {
         Ok(data) => data,
-        Err(e) => { return Err(ErrorOriginal::new(ErrorKind::Other, "Failed to create json!")); }
+        Err(e) => { return Err(Error::new(ErrorKind::Other, "Failed to create json!")); }
     };
 
     let bytes_out = match f.write(data.as_bytes()) {
         Ok(bytes) => bytes,
-        Err(e) => { return Err(ErrorOriginal::new(ErrorKind::Other, "failed o write out data!")); }
+        Err(e) => { return Err(Error::new(ErrorKind::Other, "failed o write out data!")); }
     };
-
-    println!("Wrote the file!");
 
     Ok(())
 }
@@ -283,15 +277,3 @@ pub fn get_http_address() -> String {
     server
 }
 
-/*
-pub fn get_template_data(config: &SmartDiagnosticsConfig) -> Map<String, Value> {
-    let mut data = Map::new();
-
-    let url : String = match config.data_destination_url {
-        Some(url) => url,
-        None => "".to_string()
-    };
-
-    data.insert("address".to_string(), to_json(&url.to_owned()));
-    data
-}*/
