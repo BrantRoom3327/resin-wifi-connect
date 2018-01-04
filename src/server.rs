@@ -6,8 +6,7 @@ use std::net::Ipv4Addr;
 use serde_json;
 use path::PathBuf;
 use iron::prelude::*;
-use iron::{Iron, Request, Response, IronResult, status, typemap, IronError, 
-            Url, AfterMiddleware, headers};
+use iron::{Iron, Request, Response, IronResult, status, typemap, IronError, Url, AfterMiddleware, headers};
 use iron::modifiers::Redirect;
 use iron::mime::Mime;
 
@@ -17,24 +16,24 @@ use mount::Mount;
 use persistent::Write;
 use params::{Params, FromValue};
 
-use config::{CFG_FILE, AUTH_FILE, SERVER_PORT, Auth};
-use config::{get_http_address, load_auth};
+use config::{AUTH_FILE, SERVER_PORT, CONFIG_PAGE, SmartDiagnosticsConfig,
+             get_http_address, load_auth, write_diagnostics_config, read_diagnostics_config};
 
-use std::fs::OpenOptions;
-use std::io::Write as WriteFile;
 use std::fs::File;
 use std::env;
 
+use hbs::{HandlebarsEngine, DirectorySource};
+//use hbs::handlebars::{Handlebars, RenderContext, RenderError, Helper};
+
 use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
-
 
 #[derive(Debug)]
 struct RequestSharedState {
     gateway: Ipv4Addr,
     server_rx: Receiver<NetworkCommandResponse>,
     network_tx: Sender<NetworkCommand>,
-    exit_tx: Sender<ExitResult>,
+    exit_tx: Sender<ExitResult>
 }
 
 impl typemap::Key for RequestSharedState {
@@ -53,6 +52,12 @@ impl fmt::Display for StringError {
 impl Error for StringError {
     fn description(&self) -> &str {
         &*self.0
+    }
+}
+
+impl fmt::Display for SmartDiagnosticsConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
     }
 }
 
@@ -137,7 +142,16 @@ pub fn start_server(
     ui_path: &PathBuf,
 ) {
     let exit_tx_clone = exit_tx.clone();
-    //let gateway_clone = gateway;
+    let gateway_clone = gateway;
+
+    let diagnostics = match read_diagnostics_config() {
+        Ok(config) => config,
+        Err(config) => {
+            println!("Failed to read configuration file for diagnostics on startup!");
+            panic!("{:?}", config);
+        }
+    };
+
     let request_state = RequestSharedState {
         gateway: gateway,
         server_rx: server_rx,
@@ -148,13 +162,12 @@ pub fn start_server(
     let mut router = Router::new();
     router.get("/", Static::new(ui_path), "index");
     router.get("/ssid", ssid, "ssid");
-
     router.post("/connect", connect, "connect");
 
     // kcf routes
     router.post("/auth", do_auth, "auth");
-    router.get("/config", get_config, "config");
-    router.post("/setdatasource", set_data_source, "set_config");
+    router.get("/config", get_configuration, "config");
+    router.post("/setdatasource", set_configuration, "set_config");
     // end kcf routes
 
     let mut assets = Mount::new();
@@ -163,13 +176,21 @@ pub fn start_server(
     assets.mount("/img", Static::new(&ui_path.join("img")));
     assets.mount("/js", Static::new(&ui_path.join("js")));
 
+    // handlebar style templates
+    let mut hbse = HandlebarsEngine::new();
+    hbse.add(Box::new(DirectorySource::new("./public/", ".hbs")));
+    if let Err(r) = hbse.reload() {
+        panic!("{}", r);
+    }
+
     let mut chain = Chain::new(assets);
     chain.link(Write::<RequestSharedState>::both(request_state));
     chain.link_after(RedirectMiddleware);
+    chain.link_after(hbse);
 
     let address = format!("{}:{}", gateway, SERVER_PORT);
 
-    info!("Starting HTTP server on {}", &address);
+    info!("Starting HTTP server on http://{}", &address);
 
     if let Err(e) = Iron::new(chain).http(&address) {
         exit(
@@ -249,25 +270,47 @@ fn connect(req: &mut Request) -> IronResult<Response> {
 // KCF specific
 //
 
-fn set_data_source(req: &mut Request) -> IronResult<Response> {
-    let destinationaddress = {
+fn set_configuration(req: &mut Request) -> IronResult<Response> {
+    let destination_address = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
         let address = get_param!(params, "destinationaddress", String);
-        (address)
+        address
     };
 
-    println!("Incoming address -> {} ", destinationaddress);
+    println!("Incoming address -> {} ", destination_address);
 
-    // need to write this all to a file.
+    // FIXME: Take a mutex or lock one shared one that exists.
+    let mut cfg = match read_diagnostics_config() {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            return Err(IronError::new(err, status::InternalServerError));
+        }
+    };
+
+    cfg.data_destination_url = destination_address;
+    
+    let status = match write_diagnostics_config(&cfg) {
+        Ok(s) => s,
+        Err(err) => {
+            return Err(IronError::new(err, status::InternalServerError));
+        }
+    };
+
+    //FIXME:
+    // if we succeed, redirect back to the login screen...
 
     Ok(Response::with(status::Ok))
 }
 
-pub fn get_config(req: &mut Request) -> IronResult<Response> {
+// can we close over the ironrequest and make our own method to inject file serving?
+pub fn get_configuration(req: &mut Request) -> IronResult<Response> {
     let mut path = env::current_dir().unwrap();
-    path.push("public/config.html");
+    path.push(CONFIG_PAGE);
 
-    println!("send file {:?}", path);
+    // TODO templating
+    //let template_data = get_template_data();
+    // TODO: read the cfg file at startup.  Use that config throughout.
+    //TODO: Need to read the config file and load the data
 
     let content_type = "text/html".parse::<Mime>().unwrap();
     let file = File::open(path).unwrap();
@@ -284,8 +327,6 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
 
     let creds = load_auth(AUTH_FILE).expect("Auth failed");
 
-    println!("Incoming user {} pass {}", user, pass);
-
     let mut auth_ok = false;
     if user == creds.username &&
        pass == creds.password {
@@ -295,19 +336,12 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
     // parse the ip based on the hardcoded gateway ip
     let mut address = get_http_address();
     address.push_str("/config");
-    println!("Config file is {}", address);
 
     let url = Url::parse(&address).unwrap();
-    let errorurl = Url::parse("http://www.google.com").unwrap();
 
-    // This works!  use status::Found for return on redirect
     let resp = match auth_ok {
-        true => {
-            Response::with((status::Found, Redirect(url.clone())))
-        },
-        false => {
-            Response::with((status::Unauthorized, "Bad login"))
-        }
+        true => Response::with((status::Found, Redirect(url.clone()))),
+        false => Response::with((status::Unauthorized, "Bad login"))
     };
 
     println!("resp is {:?}", resp);

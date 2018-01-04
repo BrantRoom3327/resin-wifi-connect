@@ -13,6 +13,8 @@ extern crate mount;
 extern crate serde_json;
 extern crate persistent;
 extern crate params;
+extern crate handlebars;
+extern crate handlebars_iron as hbs;
 
 #[macro_use]
 extern crate serde_derive;

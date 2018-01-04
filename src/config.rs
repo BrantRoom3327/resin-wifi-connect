@@ -1,7 +1,12 @@
 extern crate serde;
 extern crate serde_json;
 
+use std::io::{ErrorKind};
+use std::io::Error as ErrorOriginal;
 use serde_json::Error;
+use serde_json::value::{Map, Value};
+//use handlebars::{to_json, Handlebars, Helper, JsonRender, RenderContext, RenderError};
+use handlebars::{to_json};
 
 use clap::{Arg, App};
 
@@ -11,9 +16,9 @@ use std::str::FromStr;
 use std::path::PathBuf;
 use std::ffi::OsStr;
 
-use std::io;
 use std::io::prelude::*;
 use std::fs::File;
+use std::fs::OpenOptions;
 
 pub const SERVER_PORT: i32 = 8080;
 const DEFAULT_GATEWAY: &str = "192.168.1.148";
@@ -24,6 +29,9 @@ const DEFAULT_UI_PATH: &str = "public";
 pub const AUTH_FILE: &str = "auth.json";
 pub const CFG_FILE: &str = "cfg.json";
 
+// files being served
+pub const CONFIG_PAGE: &str = "public/config.hbs";
+
 pub struct Config {
     pub interface: Option<String>,
     pub ssid: String,
@@ -33,6 +41,17 @@ pub struct Config {
     pub dhcp_range: String,
     pub timeout: u64,
     pub ui_path: PathBuf,
+}
+
+//KCF specific data storage
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SmartDiagnosticsConfig {
+    pub cloud_storage_enable: bool, // true to store in cloud, false to store on local server.
+    pub data_destination_url: String,
+    pub proxy_enabled: bool, //true if going through a proxy, false otherwise
+    pub proxy_login: String,
+    pub proxy_password: String,
+    pub proxy_gateway: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -118,49 +137,35 @@ pub fn get_config() -> Config {
         .get_matches();
 
     let interface: Option<String> = matches.value_of("portal-interface").map_or_else(
-        || {
-            env::var("PORTAL_INTERFACE").ok()
-        },
+        || { env::var("PORTAL_INTERFACE").ok() },
         |v| Some(v.to_string()),
     );
 
     let ssid: String = matches.value_of("portal-ssid").map_or_else(
-        || {
-            env::var("PORTAL_SSID").unwrap_or_else(|_| DEFAULT_SSID.to_string())
-        },
+        || { env::var("PORTAL_SSID").unwrap_or_else(|_| DEFAULT_SSID.to_string()) },
         String::from,
     );
 
     let passphrase: Option<String> = matches.value_of("portal-passphrase").map_or_else(
-        || {
-            env::var("PORTAL_PASSPHRASE").ok()
-        },
+        || { env::var("PORTAL_PASSPHRASE").ok() },
         |v| Some(v.to_string()),
     );
 
     let clear = matches.value_of("clear").map_or(true, |v| !(v == "false"));
 
     let gateway = Ipv4Addr::from_str(&matches.value_of("portal-gateway").map_or_else(
-        || {
-
-            env::var("PORTAL_GATEWAY").unwrap_or_else(|_| DEFAULT_GATEWAY.to_string())
-        },
+        || { env::var("PORTAL_GATEWAY").unwrap_or_else(|_| DEFAULT_GATEWAY.to_string()) },
         String::from,
     )).expect("Cannot parse gateway address");
 
     let dhcp_range = matches.value_of("portal-dhcp-range").map_or_else(
-        || {
-            env::var("PORTAL_DHCP_RANGE").unwrap_or_else(|_| DEFAULT_DHCP_RANGE.to_string())
-        },
+        || { env::var("PORTAL_DHCP_RANGE").unwrap_or_else(|_| DEFAULT_DHCP_RANGE.to_string()) },
         String::from,
     );
 
     // TODO: network_manager receives the timeout in seconds, should be ms instead.
     let timeout = u64::from_str(&matches.value_of("timeout").map_or_else(
-        || {
-
-            env::var("CONNECT_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_MS.to_string())
-        },
+        || { env::var("CONNECT_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_MS.to_string())  },
         String::from,
     )).expect("Cannot parse connect timeout") / 1000;
 
@@ -194,7 +199,6 @@ fn get_ui_path(cmd_ui_path: Option<&str>) -> PathBuf {
     PathBuf::from(DEFAULT_UI_PATH)
 }
 
-
 /// Checks whether `WiFi Connect` is running from install path and whether the
 /// UI directory is present in a corresponding location
 /// e.g. /usr/local/sbin/wifi-connect -> /usr/local/share/wifi-connect/ui
@@ -227,19 +231,48 @@ fn get_install_ui_path() -> Option<PathBuf> {
     None
 }
 
-pub fn load_auth(file_path: &str) -> Result<Auth, Error> {
+//
+//
+// KCF section
+//
+//
 
+pub fn load_auth(file_path: &str) -> Result<Auth, Error> {
     let mut data = String::new();
     let mut f = File::open(file_path).expect("Can't open file");
     f.read_to_string(&mut data).expect("Can't read file");
-
-    //parse json and check it.
     let auth: Auth = serde_json::from_str(&data[..])?;
-
-    // Do things just like with any other Rust data structure.
-    //println!("username {} pass {}", p.username, p.password);
-
     Ok(auth)
+}
+
+pub fn read_diagnostics_config() -> Result<SmartDiagnosticsConfig, Error> {
+    let mut data = String::new();
+    let mut f = File::open(CFG_FILE).expect("Can't open file");
+    f.read_to_string(&mut data).expect("Can't read file");
+    let cfg: SmartDiagnosticsConfig = serde_json::from_str(&data[..])?;
+    Ok(cfg)
+}
+
+pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), ErrorOriginal> {
+
+    let mut f = match OpenOptions::new().write(true).truncate(true).open(CFG_FILE) {
+        Ok(f) => f,
+        Err(e) => { return Err(ErrorOriginal::new(ErrorKind::Other, "Failed to open config file!")); }
+    };
+
+    let data = match serde_json::to_string(&config) {
+        Ok(data) => data,
+        Err(e) => { return Err(ErrorOriginal::new(ErrorKind::Other, "Failed to create json!")); }
+    };
+
+    let bytes_out = match f.write(data.as_bytes()) {
+        Ok(bytes) => bytes,
+        Err(e) => { return Err(ErrorOriginal::new(ErrorKind::Other, "failed o write out data!")); }
+    };
+
+    println!("Wrote the file!");
+
+    Ok(())
 }
 
 pub fn get_http_address() -> String {
@@ -249,3 +282,16 @@ pub fn get_http_address() -> String {
     server.push_str(&SERVER_PORT.to_string());
     server
 }
+
+/*
+pub fn get_template_data(config: &SmartDiagnosticsConfig) -> Map<String, Value> {
+    let mut data = Map::new();
+
+    let url : String = match config.data_destination_url {
+        Some(url) => url,
+        None => "".to_string()
+    };
+
+    data.insert("address".to_string(), to_json(&url.to_owned()));
+    data
+}*/

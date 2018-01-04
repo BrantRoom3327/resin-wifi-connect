@@ -19,6 +19,8 @@ params = "0.6"
 log = "0.3"
 env_logger = "0.4"
 hyper = "0.11"
+handlebars-iron = "0.25.0"
+handlebars = "0.29.1"
 
 [dependencies.clippy]
 version = "*"
