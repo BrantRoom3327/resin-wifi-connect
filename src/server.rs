@@ -278,7 +278,7 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         let destination_address = get_param!(params, "destinationaddress", String);
 
         //proxy settings
-        let proxy_enabled = get_param!(params, "proxy_on", bool);
+        let proxy_enabled = get_param!(params, "proxy", bool);
         let proxy_login = get_param!(params, "proxy_login", String);
         let proxy_password = get_param!(params, "proxy_password", String);
         let proxy_gateway = get_param!(params, "proxy_gateway", String);
@@ -343,6 +343,8 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
             return Err(IronError::new(err, status::InternalServerError));
         }
     };
+
+    println!("Server CFG proxy enabled {} cloud storage enabled {}", cfg.proxy_enabled, cfg.cloud_storage_enabled);
 
     let mut resp = Response::new();
     resp.set_mut(Template::new(CONFIG_TEMPLATE_NAME, cfg)).set_mut(status::Ok);
