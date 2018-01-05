@@ -16,8 +16,8 @@ use mount::Mount;
 use persistent::Write;
 use params::{Params, FromValue};
 
-use config::{AUTH_FILE, SERVER_PORT, HTTP_PUBLIC, CONFIG_TEMPLATE_NAME, SmartDiagnosticsConfig,
-             get_http_address, load_auth, write_diagnostics_config, read_diagnostics_config};
+use config::{AUTH_FILE, SERVER_PORT, HTTP_PUBLIC, CONFIG_TEMPLATE_NAME, ROUTE_GET_CONFIG, ROUTE_SET_CONFIG, 
+             SmartDiagnosticsConfig, get_http_address, load_auth, write_diagnostics_config, read_diagnostics_config};
 
 use std::fs::File;
 
@@ -164,8 +164,8 @@ pub fn start_server(
 
     // kcf routes
     router.post("/auth", do_auth, "auth");
-    router.get("/config", get_configuration, "config");
-    router.post("/setdatasource", set_configuration, "set_config");
+    router.get(ROUTE_GET_CONFIG, get_config, "getconfig");
+    router.post(ROUTE_SET_CONFIG, set_config, "setconfig");
     // end kcf routes
 
     let mut assets = Mount::new();
@@ -268,14 +268,33 @@ fn connect(req: &mut Request) -> IronResult<Response> {
 // KCF specific
 //
 
-fn set_configuration(req: &mut Request) -> IronResult<Response> {
-    let destination_address = {
+fn set_config(req: &mut Request) -> IronResult<Response> {
+    let (cloud_storage_enable, destination_address, 
+         proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port) = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
-        let address = get_param!(params, "destinationaddress", String);
-        address
+
+        //cloud setings
+        let cloud_storage_enable = true;
+        let destination_address = get_param!(params, "destinationaddress", String);
+
+        //proxy settings
+        let proxy_enabled = true;
+        let proxy_login = get_param!(params, "proxy_login", String);
+        let proxy_password = get_param!(params, "proxy_password", String);
+        let proxy_gateway = get_param!(params, "proxy_gateway", String);
+        let proxy_gateway_port = get_param!(params, "proxy_gateway_port", u16);
+
+        (cloud_storage_enable, destination_address, 
+            proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port)
     };
 
-    println!("Incoming address -> {} ", destination_address);
+    println!("cloud enable {}", cloud_storage_enable);
+    println!("destination {}", destination_address);
+    println!("proxy_enabled {}", proxy_enabled);
+    println!("proxy_login {}", proxy_login);
+    println!("proxy_password {}", proxy_password);
+    println!("proxy_gateway {}", proxy_gateway);
+    println!("proxy_gateway_port {}", proxy_gateway_port);
 
     //
     // FIXME: Take a mutex.
@@ -287,7 +306,18 @@ fn set_configuration(req: &mut Request) -> IronResult<Response> {
         }
     };
 
+    // modify
+    cfg.cloud_storage_enable = cloud_storage_enable;
     cfg.data_destination_url = destination_address;
+    cfg.proxy_enabled = proxy_enabled;
+    cfg.proxy_login = proxy_login;
+    cfg.proxy_password = proxy_password;
+    cfg.proxy_gateway = proxy_gateway;
+    cfg.proxy_gateway_port = proxy_gateway_port;
+    
+    //
+    // TODO: need logic to get back the cloud_source_enable and the proxy_enable
+    //
     
     let status = match write_diagnostics_config(&cfg) {
         Ok(s) => s,
@@ -305,7 +335,7 @@ fn set_configuration(req: &mut Request) -> IronResult<Response> {
 }
 
 // can we close over the ironrequest and make our own method to inject file serving?
-pub fn get_configuration(req: &mut Request) -> IronResult<Response> {
+pub fn get_config(req: &mut Request) -> IronResult<Response> {
     let cfg = match read_diagnostics_config() {
         Ok(cfg) => cfg,
         Err(err) => {
@@ -336,7 +366,7 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
 
     // parse the ip based on the hardcoded gateway ip
     let mut address = get_http_address();
-    address.push_str("/config");
+    address.push_str(ROUTE_GET_CONFIG);
 
     let url = Url::parse(&address).unwrap();
 

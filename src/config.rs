@@ -23,10 +23,14 @@ const DEFAULT_UI_PATH: &str = "public";
 pub const AUTH_FILE: &str = "auth.json";
 pub const CFG_FILE: &str = "cfg.json";
 
-// this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are strpped
-// for runtime
+// this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are stripped for runtime
 pub const HTTP_PUBLIC: &str = "./public/";
 pub const CONFIG_TEMPLATE_NAME: &str = "config";
+
+// routes
+pub const ROUTE_GET_CONFIG: &str = "/getconfig";
+pub const ROUTE_SET_CONFIG: &str = "/setconfig";
+
 
 pub struct Config {
     pub interface: Option<String>,
@@ -48,6 +52,7 @@ pub struct SmartDiagnosticsConfig {
     pub proxy_login: String,
     pub proxy_password: String,
     pub proxy_gateway: String,
+    pub proxy_gateway_port: u16,
 }
 
 #[derive(Serialize, Deserialize)]
