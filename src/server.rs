@@ -16,7 +16,7 @@ use mount::Mount;
 use persistent::Write;
 use params::{Params, FromValue};
 
-use config::{AUTH_FILE, SERVER_PORT, HTTP_PUBLIC, CONFIG_TEMPLATE_NAME, ROUTE_GET_CONFIG, ROUTE_SET_CONFIG, 
+use config::{AUTH_FILE, SERVER_PORT, HTTP_PUBLIC, CONFIG_TEMPLATE_NAME, ROUTE_GET_CONFIG, ROUTE_SET_CONFIG, CFG_FILE,
              SmartDiagnosticsConfig, get_http_address, load_auth, write_diagnostics_config, read_diagnostics_config};
 
 use std::fs::File;
@@ -145,7 +145,7 @@ pub fn start_server(
     let diagnostics = match read_diagnostics_config() {
         Ok(config) => config,
         Err(config) => {
-            println!("Failed to read configuration file for diagnostics on startup!");
+            println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
             panic!("{:?}", config);
         }
     };
@@ -269,26 +269,26 @@ fn connect(req: &mut Request) -> IronResult<Response> {
 //
 
 fn set_config(req: &mut Request) -> IronResult<Response> {
-    let (cloud_storage_enable, destination_address, 
+    let (cloud_storage_enabled, destination_address, 
          proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port) = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
 
         //cloud setings
-        let cloud_storage_enable = true;
+        let cloud_storage_enabled = get_param!(params, "cloud_storage_enabled", bool);
         let destination_address = get_param!(params, "destinationaddress", String);
 
         //proxy settings
-        let proxy_enabled = true;
+        let proxy_enabled = get_param!(params, "proxy_on", bool);
         let proxy_login = get_param!(params, "proxy_login", String);
         let proxy_password = get_param!(params, "proxy_password", String);
         let proxy_gateway = get_param!(params, "proxy_gateway", String);
         let proxy_gateway_port = get_param!(params, "proxy_gateway_port", u16);
 
-        (cloud_storage_enable, destination_address, 
+        (cloud_storage_enabled, destination_address, 
             proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port)
     };
 
-    println!("cloud enable {}", cloud_storage_enable);
+    println!("cloud storage enabled {}", cloud_storage_enabled);
     println!("destination {}", destination_address);
     println!("proxy_enabled {}", proxy_enabled);
     println!("proxy_login {}", proxy_login);
@@ -306,18 +306,19 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         }
     };
 
-    // modify
-    cfg.cloud_storage_enable = cloud_storage_enable;
-    cfg.data_destination_url = destination_address;
     cfg.proxy_enabled = proxy_enabled;
-    cfg.proxy_login = proxy_login;
-    cfg.proxy_password = proxy_password;
-    cfg.proxy_gateway = proxy_gateway;
-    cfg.proxy_gateway_port = proxy_gateway_port;
-    
-    //
-    // TODO: need logic to get back the cloud_source_enable and the proxy_enable
-    //
+    cfg.cloud_storage_enabled = cloud_storage_enabled;
+
+    if cloud_storage_enabled {
+        cfg.data_destination_url = destination_address;
+    }
+
+    if proxy_enabled {
+        cfg.proxy_login = proxy_login;
+        cfg.proxy_password = proxy_password;
+        cfg.proxy_gateway = proxy_gateway;
+        cfg.proxy_gateway_port = proxy_gateway_port;
+    }
     
     let status = match write_diagnostics_config(&cfg) {
         Ok(s) => s,

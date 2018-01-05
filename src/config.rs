@@ -46,9 +46,12 @@ pub struct Config {
 //KCF specific data storage
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SmartDiagnosticsConfig {
-    pub cloud_storage_enable: bool, // true to store in cloud, false to store on local server.
+    // cloud storage settings
+    pub cloud_storage_enabled: bool,
     pub data_destination_url: String,
-    pub proxy_enabled: bool, //true if going through a proxy, false otherwise
+
+    // proxy settings
+    pub proxy_enabled: bool,
     pub proxy_login: String,
     pub proxy_password: String,
     pub proxy_gateway: String,

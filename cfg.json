@@ -1,1 +1,1 @@
-{"cloud_storage_enable":true,"data_destination_url":"http://www.google.com/","proxy_enabled":true,"proxy_login":"Shite","proxy_password":"Bx","proxy_gateway":"127.0.0.1","proxy_gateway_port":12345}
+{"cloud_storage_enabled":false,"data_destination_url":"http://www.google.com/","proxy_enabled":true,"proxy_login":"Username","proxy_password":"Pass","proxy_gateway":"127.0.0.1","proxy_gateway_port":12345}
