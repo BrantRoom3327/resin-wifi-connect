@@ -30,7 +30,7 @@ pub const CONFIG_TEMPLATE_NAME: &str = "config";
 // routes
 pub const ROUTE_GET_CONFIG: &str = "/getconfig";
 pub const ROUTE_SET_CONFIG: &str = "/setconfig";
-
+pub const ROUTE_AUTH: &str = "/auth";
 
 pub struct Config {
     pub interface: Option<String>,

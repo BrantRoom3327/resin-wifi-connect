@@ -16,7 +16,7 @@ use mount::Mount;
 use persistent::Write;
 use params::{Params, FromValue};
 
-use config::{AUTH_FILE, SERVER_PORT, HTTP_PUBLIC, CONFIG_TEMPLATE_NAME, ROUTE_GET_CONFIG, ROUTE_SET_CONFIG, CFG_FILE,
+use config::{AUTH_FILE, SERVER_PORT, HTTP_PUBLIC, CONFIG_TEMPLATE_NAME, ROUTE_AUTH, ROUTE_GET_CONFIG, ROUTE_SET_CONFIG, CFG_FILE,
              SmartDiagnosticsConfig, get_http_address, load_auth, write_diagnostics_config, read_diagnostics_config};
 
 use std::fs::File;
@@ -163,7 +163,7 @@ pub fn start_server(
     router.post("/connect", connect, "connect");
 
     // kcf routes
-    router.post("/auth", do_auth, "auth");
+    router.post(ROUTE_AUTH, do_auth, "auth");
     router.get(ROUTE_GET_CONFIG, get_config, "getconfig");
     router.post(ROUTE_SET_CONFIG, set_config, "setconfig");
     // end kcf routes

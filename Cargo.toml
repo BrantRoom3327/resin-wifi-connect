@@ -31,3 +31,4 @@ lto = true
 
 [features]
 localbuild = []
+watch = ["handlebars-iron/watch"]
