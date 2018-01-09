@@ -21,6 +21,7 @@ env_logger = "0.4"
 hyper = "0.11"
 handlebars-iron = "0.25.0"
 handlebars = "0.29.1"
+time = "0.1"
 
 [dependencies.clippy]
 version = "*"
@@ -28,6 +29,9 @@ optional = true
 
 [profile.release]
 lto = true
+
+[dependencies.cookie]
+features = ["secure", "percent-encode"]
 
 [features]
 localbuild = []

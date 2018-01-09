@@ -8,21 +8,20 @@ use path::PathBuf;
 use iron::prelude::*;
 use iron::{Iron, Request, Response, IronResult, status, typemap, IronError, Url, AfterMiddleware, headers};
 use iron::modifiers::Redirect;
-use iron::mime::Mime;
 
 use router::Router;
 use staticfile::Static;
 use mount::Mount;
 use persistent::Write;
 use params::{Params, FromValue};
+use cookie::{CookieJar, Cookie, Key};
+use time;
 
 use config::{AUTH_FILE, SERVER_PORT, HTTP_PUBLIC, CONFIG_TEMPLATE_NAME, ROUTE_AUTH, ROUTE_GET_CONFIG, ROUTE_SET_CONFIG, CFG_FILE,
+             COOKIE_KEY, COOKIE_VALUE,
              SmartDiagnosticsConfig, get_http_address, load_auth, write_diagnostics_config, read_diagnostics_config};
 
-use std::fs::File;
-
-use hbs::{Template, HandlebarsEngine, DirectorySource, MemorySource};
-
+use hbs::{Template, HandlebarsEngine, DirectorySource};
 use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
 
@@ -249,6 +248,7 @@ fn connect(req: &mut Request) -> IronResult<Response> {
     debug!("Incoming `connect` to access point `{}` request", ssid);
 
     let request_state = get_request_state!(req);
+
     let command = NetworkCommand::Connect {
         ssid: ssid,
         passphrase: passphrase,
@@ -267,7 +267,6 @@ fn connect(req: &mut Request) -> IronResult<Response> {
 // 
 // KCF specific
 //
-
 fn set_config(req: &mut Request) -> IronResult<Response> {
     let (cloud_storage_enabled, destination_address, 
          proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port) = {
@@ -337,6 +336,24 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
 
 // can we close over the ironrequest and make our own method to inject file serving?
 pub fn get_config(req: &mut Request) -> IronResult<Response> {
+
+    // lets read the request and print it out
+    //println!("request \n{:?}", req.headers);
+
+    let s = req.headers.to_string();
+    for line in s.lines() {
+        let offset = match line.find("Cookie:") {
+            Some(offset) => offset,
+            None => s.len(),
+        };
+        if offset != s.len() {
+            println!("The Cookie line -> {}", line);
+            break;
+        }
+    }
+
+    // TODO: ok if we have a cookie, parse it
+
     let cfg = match read_diagnostics_config() {
         Ok(cfg) => cfg,
         Err(err) => {
@@ -362,8 +379,7 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
     let creds = load_auth(AUTH_FILE).expect("Auth failed");
 
     let mut auth_ok = false;
-    if user == creds.username &&
-       pass == creds.password {
+    if user == creds.username && pass == creds.password {
         auth_ok = true;
     }
 
@@ -373,12 +389,24 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
 
     let url = Url::parse(&address).unwrap();
 
-    let resp = match auth_ok {
+    let mut resp = match auth_ok {
         true => Response::with((status::Found, Redirect(url.clone()))),
         false => Response::with((status::Unauthorized, "Bad login"))
     };
 
-    //println!("resp is {:?}", resp);
+    if (auth_ok) {
+        let key = Key::generate();
+        let mut jar = CookieJar::new();
+        jar.private(&key).add(Cookie::new(COOKIE_KEY, COOKIE_VALUE));
+        
+     //   assert_ne!(jar.get(COOKIE_KEY).unwrap().value(), COOKIE_VALUE);
+     //   assert_eq!(jar.private(&key).get(COOKIE_KEY).unwrap().value(), COOKIE_VALUE);
+        
+        // set the cookie in the response headers.  There is probably a better way to do this...
+        resp.headers.append_raw("Set-Cookie", jar.get(COOKIE_KEY).unwrap().to_string().into_bytes());
+    }
+
+   // println!("server response:\n{:?}", resp);
     Ok(resp)
 }
 
