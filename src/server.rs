@@ -269,7 +269,8 @@ fn connect(req: &mut Request) -> IronResult<Response> {
 //
 fn set_config(req: &mut Request) -> IronResult<Response> {
     let (cloud_storage_enabled, destination_address, 
-         proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port) = {
+         proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port,
+         ethernet_dhcp_enabled, ethernet_ip_address, ethernet_gateway, ethernet_subnet_mask, ethernet_dns) = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
 
         //cloud setings
@@ -283,8 +284,15 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         let proxy_gateway = get_param!(params, "proxy_gateway", String);
         let proxy_gateway_port = get_param!(params, "proxy_gateway_port", u16);
 
+        let ethernet_dhcp_enabled = get_param!(params, "ethernet_dhcp_enabled", bool);
+        let ethernet_ip_address = get_param!(params, "ethernet_ip_address", String);
+        let ethernet_subnet_mask = get_param!(params, "ethernet_subnet_mask", String);
+        let ethernet_gateway = get_param!(params, "ethernet_gateway", String);
+        let ethernet_dns = get_param!(params, "ethernet_dns", String);
+
         (cloud_storage_enabled, destination_address, 
-            proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port)
+            proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port,
+            ethernet_dhcp_enabled, ethernet_ip_address, ethernet_gateway,ethernet_subnet_mask, ethernet_dns)
     };
 
     println!("cloud storage enabled {}", cloud_storage_enabled);
@@ -294,6 +302,11 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
     println!("proxy_password {}", proxy_password);
     println!("proxy_gateway {}", proxy_gateway);
     println!("proxy_gateway_port {}", proxy_gateway_port);
+    println!("ethernet_dhcp_enabled {}", ethernet_dhcp_enabled);
+    println!("ethernet_ip_address {}", ethernet_ip_address);
+    println!("ethernet_subnet_mask {}", ethernet_subnet_mask);
+    println!("ethernet_gateway {}", ethernet_gateway);
+    println!("ethernet_dns {}", ethernet_dns);
 
     //
     // FIXME: Take a mutex.
@@ -307,6 +320,7 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
 
     cfg.proxy_enabled = proxy_enabled;
     cfg.cloud_storage_enabled = cloud_storage_enabled;
+    cfg.ethernet_dhcp_enabled = ethernet_dhcp_enabled;
 
     if cloud_storage_enabled {
         cfg.data_destination_url = destination_address;
@@ -317,6 +331,13 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         cfg.proxy_password = proxy_password;
         cfg.proxy_gateway = proxy_gateway;
         cfg.proxy_gateway_port = proxy_gateway_port;
+    }
+
+    if !ethernet_dhcp_enabled {
+        cfg.ethernet_ip_address = ethernet_ip_address;
+        cfg.ethernet_subnet_mask = ethernet_subnet_mask;
+        cfg.ethernet_gateway = ethernet_gateway;
+        cfg.ethernet_dns = ethernet_dns;
     }
     
     let status = match write_diagnostics_config(&cfg) {
@@ -334,26 +355,29 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
     Ok(Response::with((status::Found, Redirect(url.clone()))))
 }
 
-// can we close over the ironrequest and make our own method to inject file serving?
 pub fn get_config(req: &mut Request) -> IronResult<Response> {
 
-    // lets read the request and print it out
-    //println!("request \n{:?}", req.headers);
-
-    let s = req.headers.to_string();
-    for line in s.lines() {
+    let headers = req.headers.to_string();
+    let mut cookie_str = String::new();
+    
+    //TODO: try using a match guard
+    for line in headers.lines() {
         let offset = match line.find("Cookie:") {
-            Some(offset) => offset,
-            None => s.len(),
+            Some(index) => index,
+            None => headers.len(),
         };
-        if offset != s.len() {
-            println!("The Cookie line -> {}", line);
+        if offset != headers.len() {
+            cookie_str = line.to_string();
             break;
         }
     }
 
-    // TODO: ok if we have a cookie, parse it
+    println!("The cookie string is {}\n", &cookie_str[7..]);
 
+    let c = Cookie::parse(&cookie_str[7..]).unwrap();
+    println!("Name of cookie is {:?}", c.name_value());
+
+    // TODO: ok if we have a cookie, parse it
     let cfg = match read_diagnostics_config() {
         Ok(cfg) => cfg,
         Err(err) => {
@@ -397,7 +421,10 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
     if (auth_ok) {
         let key = Key::generate();
         let mut jar = CookieJar::new();
+        // should the encryption run on the cookie user and pass?
         jar.private(&key).add(Cookie::new(COOKIE_KEY, COOKIE_VALUE));
+
+        // how to set expiry on the cookie
         
      //   assert_ne!(jar.get(COOKIE_KEY).unwrap().value(), COOKIE_VALUE);
      //   assert_eq!(jar.private(&key).get(COOKIE_KEY).unwrap().value(), COOKIE_VALUE);

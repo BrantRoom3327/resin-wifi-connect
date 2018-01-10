@@ -2,7 +2,6 @@ extern crate serde;
 extern crate serde_json;
 
 use std::io::{ErrorKind, Error};
-//use serde_json::value::{Map, Value};
 use clap::{Arg, App};
 use std::env;
 use std::net::Ipv4Addr;
@@ -52,6 +51,13 @@ pub struct SmartDiagnosticsConfig {
     // cloud storage settings
     pub cloud_storage_enabled: bool,
     pub data_destination_url: String,
+
+    // sd collector ip address settings.
+    pub ethernet_dhcp_enabled: bool,
+    pub ethernet_ip_address: String,
+    pub ethernet_subnet_mask: String,
+    pub ethernet_gateway: String,
+    pub ethernet_dns: String,
 
     // proxy settings
     pub proxy_enabled: bool,
