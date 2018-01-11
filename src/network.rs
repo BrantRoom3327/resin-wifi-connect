@@ -32,7 +32,9 @@ pub fn process_network_commands2(config: &Config, exit_tx: &Sender<ExitResult>) 
     let gateway = config.gateway;
     let ui_path = config.ui_path.clone();
 
-    thread::spawn(move || { start_server(gateway, server_rx, network_tx, exit_tx_server, &ui_path); });
+    thread::spawn(move || {
+        start_server(gateway, server_rx, network_tx, exit_tx_server, &ui_path);
+    });
 
     loop {
         let command = match network_rx.recv() {
