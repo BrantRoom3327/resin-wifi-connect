@@ -12,10 +12,9 @@ use staticfile::Static;
 use mount::Mount;
 use persistent::{Write};
 use params::{Params, FromValue};
-use cookie::{CookieJar, Cookie, Key};
+use cookie::{CookieJar, Cookie, Key, SameSite};
 use time;
-use config::{AUTH_FILE, SERVER_PORT, HTTP_PUBLIC, CONFIG_TEMPLATE_NAME, ROUTE_AUTH, ROUTE_GET_CONFIG, ROUTE_SET_CONFIG, CFG_FILE,
-             COOKIE_KEY, COOKIE_VALUE, SmartDiagnosticsConfig, load_auth, write_diagnostics_config, read_diagnostics_config};
+use config::*;
 use hbs::{Template, HandlebarsEngine, DirectorySource};
 use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
@@ -26,15 +25,6 @@ struct RequestSharedState {
     server_rx: Receiver<NetworkCommandResponse>,
     network_tx: Sender<NetworkCommand>,
     exit_tx: Sender<ExitResult>,
-}
-
-#[derive(Debug)]
-struct ServerData {
-    thing: String
-}
-
-fn boxed_() -> Box<ServerData> {
-    Box::new(ServerData{ thing: "Hello".to_string() })
 }
 
 impl typemap::Key for RequestSharedState {
@@ -176,8 +166,10 @@ pub fn start_server(
     router.post("/connect", connect, "connect");
 
     // kcf routes
-    router.post(ROUTE_AUTH, do_auth, "auth");
     router.get(ROUTE_GET_CONFIG, get_config, "getconfig");
+    router.get(ROUTE_SHOW_STATUS, get_status, "showstatus");
+
+    router.post(ROUTE_AUTH, do_auth, "auth");
     router.post(ROUTE_SET_CONFIG, set_config, "setconfig");
     // end kcf routes
 
@@ -360,7 +352,7 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         }
     };
 
-    let full_http_address = "http://".to_owned() + &cfg.http_server_address;
+    let full_http_address = "http://".to_string() + &cfg.http_server_address + ROUTE_SHOW_STATUS;
 
     // redirect back to login page on success
     let url = Url::parse(&full_http_address).unwrap();
@@ -371,7 +363,7 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
 
     let headers = req.headers.to_string();
     let mut cookie_str = String::new();
-    
+
     //TODO: try using a match guard
     for line in headers.lines() {
         let offset = match line.find("Cookie:") {
@@ -384,10 +376,18 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
         }
     }
 
-    println!("The cookie string is {}\n", &cookie_str[7..]);
+    if cookie_str.len() > 7 {
+        let c = Cookie::parse(&cookie_str[7..]).unwrap();
 
-    let c = Cookie::parse(&cookie_str[7..]).unwrap();
-    println!("Name of cookie is {:?}", c.name_value());
+        // FIXME: Do cookie validation, the name of it to start
+
+        //FIXME:Validate the cookie expire time (once its being set)
+
+    } else {
+        // FIXME: we need a page to send the user when things go wrong.  And display status 
+        // with the normal layout as well as a link back to the login page.
+        return Ok(Response::with((status::Unauthorized, "Not authorized.  Do you have cookies enabled for this site?")))
+    }
 
     // TODO: ok if we have a cookie, parse it
     let cfg = match read_diagnostics_config() {
@@ -397,7 +397,7 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
         }
     };
 
-    println!("Server CFG proxy enabled {} cloud storage enabled {}", cfg.proxy_enabled, cfg.cloud_storage_enabled);
+    //println!("Server CFG proxy enabled {} cloud storage enabled {}", cfg.proxy_enabled, cfg.cloud_storage_enabled);
 
     let mut resp = Response::new();
     resp.set_mut(Template::new(CONFIG_TEMPLATE_NAME, cfg)).set_mut(status::Ok);
@@ -426,11 +426,10 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
             panic!("{:?}", config);
         }
     };
-    let redirect_path = "http://".to_owned() + &cfg.http_server_address + ROUTE_GET_CONFIG;
-    println!("REdirect to {}", redirect_path);
+
+    let redirect_path = "http://".to_string() + &cfg.http_server_address + ROUTE_GET_CONFIG;
 
     let url = Url::parse(&redirect_path).unwrap();
-    println!("The Url we are gonna use {}", url);
 
     let mut resp = match auth_ok {
         true => Response::with((status::Found, Redirect(url.clone()))),
@@ -438,21 +437,66 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
     };
 
     if auth_ok {
+        // FIXME: figure out box<Key> or similar so that the key can be stored
+        // in some other structure and used for get requests.
+
+        println!("Create the cookie2!\n");
         let key = Key::generate();
         let mut jar = CookieJar::new();
-        // should the encryption run on the cookie user and pass?
-        jar.private(&key).add(Cookie::new(COOKIE_KEY, COOKIE_VALUE));
 
-        // how to set expiry on the cookie
+    /*
+        let mut cookie = Cookie::build(COOKIE_NAME, COOKIE_VALUE)
+            .secure(true)
+            .http_only(true)
+            .finish();
         
-     //   assert_ne!(jar.get(COOKIE_KEY).unwrap().value(), COOKIE_VALUE);
-     //   assert_eq!(jar.private(&key).get(COOKIE_KEY).unwrap().value(), COOKIE_VALUE);
+       
+        // should the encryption run on the cookie user and pass?
+        jar.private(&key).add(cookie);
+
+        assert_ne!(jar.get(COOKIE_NAME).unwrap().value(), COOKIE_VALUE);
+        assert_eq!(jar.private(&key).get(COOKIE_NAME).unwrap().value(), COOKIE_VALUE);
+       */
+       let mut cookie = Cookie::new(COOKIE_NAME, COOKIE_VALUE);
+       /*
+        let mut cookie = Cookie::build(COOKIE_NAME, COOKIE_VALUE)
+            .secure(true)
+            .http_only(true)
+            .finish();
+            */
+        // set expires time
+
+        // Setting expires is causing a failure..
+        /*
+        let mut now = time::now();
+        now.tm_hour += COOKIE_EXPIRES_HOURS;
+        cookie.set_expires(now);
+        */
+        cookie.set_same_site(SameSite::Strict);
         
+        jar.private(&key).add(cookie);
+  
         // set the cookie in the response headers.  There is probably a better way to do this...
-        resp.headers.append_raw("Set-Cookie", jar.get(COOKIE_KEY).unwrap().to_string().into_bytes());
+        resp.headers.append_raw("Set-Cookie", jar.get(COOKIE_NAME).unwrap().to_string().into_bytes());
     }
 
-   // println!("server response:\n{:?}", resp);
+    println!("server response:\n{:?}", resp);
+    Ok(resp)
+}
+
+pub fn get_status(req: &mut Request) -> IronResult<Response> {
+
+    /// create a live serde cfg object with all the status info
+    let cfg = match read_diagnostics_config() {
+        Ok(config) => config,
+        Err(config) => {
+            println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
+            panic!("{:?}", config);
+        }
+    };
+
+    let mut resp = Response::new();
+    resp.set_mut(Template::new(STATUS_TEMPLATE_NAME, cfg)).set_mut(status::Ok);
     Ok(resp)
 }
 

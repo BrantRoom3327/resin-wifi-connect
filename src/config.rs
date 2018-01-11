@@ -22,6 +22,9 @@ const DEFAULT_UI_PATH: &str = "public";
 // this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are stripped for runtime
 pub const HTTP_PUBLIC: &str = "./public/";
 pub const CONFIG_TEMPLATE_NAME: &str = "config";
+pub const STATUS_TEMPLATE_NAME: &str = "status";
+
+//required config and auth files for the server to validate connections and store persistent data.
 pub const AUTH_FILE: &str = "auth.json";
 pub const CFG_FILE: &str = "cfg.json";
 
@@ -29,10 +32,12 @@ pub const CFG_FILE: &str = "cfg.json";
 pub const ROUTE_GET_CONFIG: &str = "/getconfig";
 pub const ROUTE_SET_CONFIG: &str = "/setconfig";
 pub const ROUTE_AUTH: &str = "/auth";
+pub const ROUTE_SHOW_STATUS : &str = "/status";
 
 // cookie for auth
-pub const COOKIE_KEY: &str = "tastybiscuits";
+pub const COOKIE_NAME: &str = "tastybiscuits";
 pub const COOKIE_VALUE: &str = "lemonShortbread";
+pub const COOKIE_EXPIRES_HOURS: i32 = 1;
 
 pub struct Config {
     pub interface: Option<String>,
@@ -66,6 +71,8 @@ pub struct SmartDiagnosticsConfig {
     pub proxy_gateway: String,
     pub proxy_gateway_port: u16,
 
+    // used as a cache right now, set at runtime on start.
+    //TODO: find a better place to store this.
     pub http_server_address: String,
 }
 

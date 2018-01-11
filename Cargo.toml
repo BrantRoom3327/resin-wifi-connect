@@ -22,6 +22,7 @@ hyper = "0.11"
 handlebars-iron = "0.25.0"
 handlebars = "0.29.1"
 time = "0.1"
+libc = "0.2.35"
 
 [dependencies.clippy]
 version = "*"
