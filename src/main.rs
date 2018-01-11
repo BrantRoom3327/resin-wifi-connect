@@ -50,7 +50,7 @@ pub fn exit(exit_tx: &Sender<ExitResult>, error: String) {
 fn main() {
     logger::init();
 
-    println!("Running local debug build.  NOT for docker image\n");
+    println!("<<Running local debug build>>\n");
 
     let config = get_config();
 

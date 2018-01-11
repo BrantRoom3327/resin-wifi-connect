@@ -24,5 +24,5 @@ else
     #run a debug build, default
     cargo build --features="localbuild"
     cp target/debug/wifi-connect .
-    ./wifi-connect
+    ./wifi-connect --portal-gateway=192.168.1.148
 fi

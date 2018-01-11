@@ -15,15 +15,15 @@ use std::fs::OpenOptions;
 pub const SERVER_PORT: i32 = 8080;
 const DEFAULT_GATEWAY: &str = "192.168.1.148";
 const DEFAULT_DHCP_RANGE: &str = "192.168.42.2,192.168.42.254";
-const DEFAULT_SSID: &str = "WiFi Connect";
+const DEFAULT_SSID: &str = "QuarterMaster";
 const DEFAULT_TIMEOUT_MS: &str = "15000";
 const DEFAULT_UI_PATH: &str = "public";
-pub const AUTH_FILE: &str = "auth.json";
-pub const CFG_FILE: &str = "cfg.json";
 
 // this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are stripped for runtime
 pub const HTTP_PUBLIC: &str = "./public/";
 pub const CONFIG_TEMPLATE_NAME: &str = "config";
+pub const AUTH_FILE: &str = "auth.json";
+pub const CFG_FILE: &str = "cfg.json";
 
 // routes
 pub const ROUTE_GET_CONFIG: &str = "/getconfig";
@@ -65,6 +65,8 @@ pub struct SmartDiagnosticsConfig {
     pub proxy_password: String,
     pub proxy_gateway: String,
     pub proxy_gateway_port: u16,
+
+    pub http_server_address: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -174,7 +176,6 @@ pub fn get_config() -> Config {
 
     let gateway = Ipv4Addr::from_str(&matches.value_of("portal-gateway").map_or_else(
         || {
-
             env::var("PORTAL_GATEWAY").unwrap_or_else(|_| DEFAULT_GATEWAY.to_string())
         },
         String::from,
@@ -190,7 +191,6 @@ pub fn get_config() -> Config {
     // TODO: network_manager receives the timeout in seconds, should be ms instead.
     let timeout = u64::from_str(&matches.value_of("timeout").map_or_else(
         || {
-
             env::var("CONNECT_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_MS.to_string())
         },
         String::from,
@@ -299,13 +299,5 @@ pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), E
     };
 
     Ok(())
-}
-
-pub fn get_http_address() -> String {
-    let mut server : String = "http://".to_owned();
-    server.push_str(DEFAULT_GATEWAY);
-    server.push_str(":");
-    server.push_str(&SERVER_PORT.to_string());
-    server
 }
 

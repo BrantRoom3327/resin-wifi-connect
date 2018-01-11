@@ -26,17 +26,13 @@ pub enum NetworkCommandResponse {
 
 #[cfg_attr(feature = "cargo-clippy", allow(cyclomatic_complexity))]
 pub fn process_network_commands2(config: &Config, exit_tx: &Sender<ExitResult>) {
-
     let (server_tx, server_rx) = channel();
     let (network_tx, network_rx) = channel();
-
     let exit_tx_server = exit_tx.clone();
     let gateway = config.gateway;
     let ui_path = config.ui_path.clone();
 
-    thread::spawn(move || {
-        start_server(gateway, server_rx, network_tx, exit_tx_server, &ui_path);
-    });
+    thread::spawn(move || { start_server(gateway, server_rx, network_tx, exit_tx_server, &ui_path); });
 
     loop {
         let command = match network_rx.recv() {
@@ -51,18 +47,6 @@ pub fn process_network_commands2(config: &Config, exit_tx: &Sender<ExitResult>) 
                 );
             },
         };
-
-        match command {
-            NetworkCommand::Activate => {
-               println!("Got an activate network command"); 
-            },
-            NetworkCommand::Connect {
-                ssid,
-                passphrase,
-            } => {
-                println!("Request to connect to AP ssid {} passphrase {}", ssid, passphrase);
-            },
-        }
     }
 }
 

@@ -2,25 +2,20 @@ use std::sync::mpsc::{Sender, Receiver};
 use std::error::Error;
 use std::fmt;
 use std::net::Ipv4Addr;
-
 use serde_json;
 use path::PathBuf;
 use iron::prelude::*;
 use iron::{Iron, Request, Response, IronResult, status, typemap, IronError, Url, AfterMiddleware, headers};
 use iron::modifiers::Redirect;
-
 use router::Router;
 use staticfile::Static;
 use mount::Mount;
-use persistent::Write;
+use persistent::{Write};
 use params::{Params, FromValue};
 use cookie::{CookieJar, Cookie, Key};
 use time;
-
 use config::{AUTH_FILE, SERVER_PORT, HTTP_PUBLIC, CONFIG_TEMPLATE_NAME, ROUTE_AUTH, ROUTE_GET_CONFIG, ROUTE_SET_CONFIG, CFG_FILE,
-             COOKIE_KEY, COOKIE_VALUE,
-             SmartDiagnosticsConfig, get_http_address, load_auth, write_diagnostics_config, read_diagnostics_config};
-
+             COOKIE_KEY, COOKIE_VALUE, SmartDiagnosticsConfig, load_auth, write_diagnostics_config, read_diagnostics_config};
 use hbs::{Template, HandlebarsEngine, DirectorySource};
 use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
@@ -30,7 +25,16 @@ struct RequestSharedState {
     gateway: Ipv4Addr,
     server_rx: Receiver<NetworkCommandResponse>,
     network_tx: Sender<NetworkCommand>,
-    exit_tx: Sender<ExitResult>
+    exit_tx: Sender<ExitResult>,
+}
+
+#[derive(Debug)]
+struct ServerData {
+    thing: String
+}
+
+fn boxed_() -> Box<ServerData> {
+    Box::new(ServerData{ thing: "Hello".to_string() })
 }
 
 impl typemap::Key for RequestSharedState {
@@ -139,13 +143,23 @@ pub fn start_server(
     ui_path: &PathBuf,
 ) {
     let exit_tx_clone = exit_tx.clone();
-    let gateway_clone = gateway;
 
-    let diagnostics = match read_diagnostics_config() {
+    let mut cfg = match read_diagnostics_config() {
         Ok(config) => config,
         Err(config) => {
             println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
             panic!("{:?}", config);
+        }
+    };
+
+    // full http://<ip>:port path to server, using the file as a cache right now
+    // Find a better way perhaps using Box<T> heap allocated mem or use persistent::State
+    cfg.http_server_address = gateway.to_string() + ":" + &SERVER_PORT.to_string();
+
+    let status = match write_diagnostics_config(&cfg) {
+        Ok(s) => s,
+        Err(err) => {
+            panic!("{:?}", err);
         }
     };
 
@@ -180,19 +194,17 @@ pub fn start_server(
         panic!("{}", r);
     }
 
+    info!("Starting HTTP server on http://{}", cfg.http_server_address);
+
     let mut chain = Chain::new(assets);
     chain.link(Write::<RequestSharedState>::both(request_state));
     chain.link_after(RedirectMiddleware);
     chain.link_after(hbse);
 
-    let address = format!("{}:{}", gateway, SERVER_PORT);
-
-    info!("Starting HTTP server on http://{}", &address);
-
-    if let Err(e) = Iron::new(chain).http(&address) {
+    if let Err(e) = Iron::new(chain).http(&cfg.http_server_address) {
         exit(
             &exit_tx_clone,
-            format!("Cannot start HTTP server on '{}': {}", &address, e.description()),
+            format!("Cannot start HTTP server on '{}': {}", &cfg.http_server_address, e.description()),
         );
     }
 }
@@ -237,7 +249,8 @@ fn ssid(req: &mut Request) -> IronResult<Response> {
 }
 
 fn connect(req: &mut Request) -> IronResult<Response> {
-    println!("connect() called with a request");
+    println!("Connect called!\n");
+
     let (ssid, passphrase) = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
         let ssid = get_param!(params, "ssid", String);
@@ -347,11 +360,10 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         }
     };
 
-    //Consider redirecting to a status page showing you current configuration.
+    let full_http_address = "http://".to_owned() + &cfg.http_server_address;
 
     // redirect back to login page on success
-    let address = get_http_address();
-    let url = Url::parse(&address).unwrap();
+    let url = Url::parse(&full_http_address).unwrap();
     Ok(Response::with((status::Found, Redirect(url.clone()))))
 }
 
@@ -393,6 +405,7 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
 }
 
 pub fn do_auth(req: &mut Request) -> IronResult<Response> {
+
     let (user, pass) = {
         let params = get_request_ref!(req, Params, "Getting request params failed");
         let user = get_param!(params, "username", String);
@@ -402,23 +415,29 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
 
     let creds = load_auth(AUTH_FILE).expect("Auth failed");
 
-    let mut auth_ok = false;
-    if user == creds.username && pass == creds.password {
-        auth_ok = true;
-    }
+    let auth_ok = if user == creds.username && pass == creds.password { true } 
+                  else { false };
 
-    // parse the ip based on the hardcoded gateway ip
-    let mut address = get_http_address();
-    address.push_str(ROUTE_GET_CONFIG);
+    // the http server address is stored in the config file right now.
+    let cfg = match read_diagnostics_config() {
+        Ok(config) => config,
+        Err(config) => {
+            println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
+            panic!("{:?}", config);
+        }
+    };
+    let redirect_path = "http://".to_owned() + &cfg.http_server_address + ROUTE_GET_CONFIG;
+    println!("REdirect to {}", redirect_path);
 
-    let url = Url::parse(&address).unwrap();
+    let url = Url::parse(&redirect_path).unwrap();
+    println!("The Url we are gonna use {}", url);
 
     let mut resp = match auth_ok {
         true => Response::with((status::Found, Redirect(url.clone()))),
         false => Response::with((status::Unauthorized, "Bad login"))
     };
 
-    if (auth_ok) {
+    if auth_ok {
         let key = Key::generate();
         let mut jar = CookieJar::new();
         // should the encryption run on the cookie user and pass?
