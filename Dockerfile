@@ -19,12 +19,16 @@ COPY public public
 COPY Cargo.toml Cargo.toml
 COPY rustfmt.toml rustfmt.toml
 COPY start start
-COPY target target
+COPY cfg.json cfg.json
+COPY auth.json auth.json
+
+#copy the exe out to the root dir
+COPY target/x86_64-unknown-linux-gnu/release/wifi-connect .
 
 RUN usermod --password '' root
 RUN systemctl unmask console-getty.service
 RUN mkdir -p /etc/systemd/system/default.target.wants
 RUN ln -sf /usr/lib/systemd/system/console-getty.service /etc/systemd/system/default.target.wants/console-getty.service
 
-EXPOSE 80 53
+EXPOSE 80 53 8080
 CMD ["/bin/bash"]

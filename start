@@ -1,5 +1,6 @@
 #!/bin/bash
-DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket target/x86_64-unknown-linux-gnu/debug/wifi-connect --clear=false --portal-interface=wlp2s0
+export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket ./wifi-connect --clear=false --portal-interface=wlp2s0
+
 echo "wifi connect exited"
 while true; do
     sleep 100
