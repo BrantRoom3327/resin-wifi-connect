@@ -33,7 +33,8 @@ if [ "${PRODUCTION}" == "1" ]; then
     docker build --rm -t wifitest .
 elif [ "${LOCAL_DOCKER}" == "1" ]; then 
     # use the local Dockerfile to build an image
-    scripts/local-build.sh x86_64-unknown-linux-gnu
+    cargo build --features="localbuild"
+    cp target/debug/wifi-connect .
     docker build --rm -t wifitest .
 else
     #run a debug build, default
@@ -43,3 +44,4 @@ else
     # if you need to set by ip address instead.
     #./wifi-connect --portal-gateway=192.168.1.148
 fi
+#    scripts/local-build.sh x86_64-unknown-linux-gnu

@@ -1,4 +1,4 @@
-FROM fedora:latest
+FROM fedora:27
 
 RUN yum update; yum install vim dnsmasq bash NetworkManager NetworkManager-wifi dbus wireless-tools net-tools -y;
 
@@ -13,7 +13,8 @@ ENV PATH=/root/.cargo/bin:$PATH
 
 VOLUME /work
 WORKDIR /work
-COPY src src
+
+#COPY src src
 COPY scripts scripts
 COPY public public
 COPY Cargo.toml Cargo.toml
@@ -21,9 +22,7 @@ COPY rustfmt.toml rustfmt.toml
 COPY start start
 COPY cfg.json cfg.json
 COPY auth.json auth.json
-
-#copy the exe out to the root dir
-COPY target/x86_64-unknown-linux-gnu/release/wifi-connect .
+COPY wifi-connect wifi-connect
 
 RUN usermod --password '' root
 RUN systemctl unmask console-getty.service
