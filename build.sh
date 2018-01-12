@@ -41,5 +41,5 @@ else
     cp target/debug/wifi-connect .
     ./wifi-connect --portal-interface=en0
     # if you need to set by ip address instead.
-    #./wifi-connect --portal-gateway=192.168.1.123
+    #./wifi-connect --portal-gateway=192.168.1.148
 fi

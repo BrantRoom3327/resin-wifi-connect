@@ -116,8 +116,7 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
 
                 if let Err(e) = server_tx.send(NetworkCommandResponse::AccessPointsSsids(
                     access_points_ssids,
-                ))
-                {
+                )) {
                     return exit_with_error(
                         exit_tx,
                         dnsmasq,
@@ -130,10 +129,7 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
                     );
                 }
             },
-            NetworkCommand::Connect {
-                ssid,
-                passphrase,
-            } => {
+            NetworkCommand::Connect { ssid, passphrase } => {
                 if let Some(connection) = portal_connection {
                     let result = stop_portal(&connection, &config.ssid);
                     if let Err(e) = result {
@@ -197,15 +193,13 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
 
                             warn!(
                                 "Connection to access point not activated '{}': {:?}",
-                                access_point_ssid,
-                                state
+                                access_point_ssid, state
                             );
                         },
                         Err(e) => {
                             warn!(
                                 "Error connecting to access point '{}': {}",
-                                access_point_ssid,
-                                e
+                                access_point_ssid, e
                             );
                         },
                     }
@@ -224,23 +218,20 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
                     },
                 };
 
-                portal_connection = match create_portal(
-                    &device,
-                    &config.ssid,
-                    &config.gateway,
-                    &portal_passphrase,
-                ) {
-                    Ok(connection) => Some(connection),
-                    Err(e) => {
-                        return exit_with_error(
-                            exit_tx,
-                            dnsmasq,
-                            portal_connection,
-                            portal_ssid,
-                            format!("Creating the access point failed: {}", e),
-                        );
-                    },
-                };
+                portal_connection =
+                    match create_portal(&device, &config.ssid, &config.gateway, &portal_passphrase)
+                    {
+                        Ok(connection) => Some(connection),
+                        Err(e) => {
+                            return exit_with_error(
+                                exit_tx,
+                                dnsmasq,
+                                portal_connection,
+                                portal_ssid,
+                                format!("Creating the access point failed: {}", e),
+                            );
+                        },
+                    };
             },
         }
     }
@@ -283,7 +274,10 @@ fn has_full_connectivity(manager: &NetworkManager) -> bool {
             }
         },
         Err(err) => {
-            error!("Assuming no connectivity as checking for network connectivity failed: {}", err);
+            error!(
+                "Assuming no connectivity as checking for network connectivity failed: {}",
+                err
+            );
             false
         },
     }
@@ -315,7 +309,11 @@ fn clear_wifi_connections(connections: Vec<Connection>) -> Result<(), String> {
                 connection.settings().ssid,
             );
 
-            debug!("ID [{}] UUID {}", connection.settings().id, connection.settings().uuid);
+            debug!(
+                "ID [{}] UUID {}",
+                connection.settings().id,
+                connection.settings().uuid
+            );
             connection.delete()?;
         }
     }
@@ -381,9 +379,9 @@ pub fn find_device(manager: &NetworkManager, interface: &Option<String>) -> Resu
     } else {
         let devices = manager.get_devices()?;
 
-        let index = devices.iter().position(
-            |d| *d.device_type() == DeviceType::WiFi,
-        );
+        let index = devices
+            .iter()
+            .position(|d| *d.device_type() == DeviceType::WiFi);
 
         if let Some(index) = index {
             info!("WiFi device: {}", devices[index].interface());
@@ -407,7 +405,10 @@ fn get_access_points(device: &Device) -> Result<Vec<AccessPoint>, String> {
         access_points.retain(|ap| ap.ssid().as_str().is_ok());
 
         if !access_points.is_empty() {
-            info!("Access points: {:?}", get_access_points_ssids(&access_points));
+            info!(
+                "Access points: {:?}",
+                get_access_points_ssids(&access_points)
+            );
             return Ok(access_points);
         }
 
@@ -457,11 +458,7 @@ fn create_portal(
 ) -> Result<Connection, String> {
     info!("Starting access point...");
     let wifi_device = device.as_wifi_device().unwrap();
-    let (portal_connection, _) = wifi_device.create_hotspot(
-        ssid,
-        *passphrase,
-        Some(*gateway),
-    )?;
+    let (portal_connection, _) = wifi_device.create_hotspot(ssid, *passphrase, Some(*gateway))?;
     info!("Access point '{}' created", ssid);
     Ok(portal_connection)
 }
@@ -517,14 +514,16 @@ fn wait_for_connectivity(manager: &NetworkManager, timeout: u64) -> Result<bool,
         let connectivity = manager.get_connectivity()?;
 
         if connectivity == Connectivity::Full || connectivity == Connectivity::Limited {
-            debug!("Connectivity established: {:?} / {}s elapsed", connectivity, total_time);
+            debug!(
+                "Connectivity established: {:?} / {}s elapsed",
+                connectivity, total_time
+            );
 
             return Ok(true);
         } else if total_time >= timeout {
             debug!(
                 "Timeout reached in waiting for connectivity: {:?} / {}s elapsed",
-                connectivity,
-                total_time
+                connectivity, total_time
             );
 
             return Ok(false);
@@ -534,7 +533,10 @@ fn wait_for_connectivity(manager: &NetworkManager, timeout: u64) -> Result<bool,
 
         total_time += 1;
 
-        debug!("Still waiting for connectivity: {:?} / {}s elapsed", connectivity, total_time);
+        debug!(
+            "Still waiting for connectivity: {:?} / {}s elapsed",
+            connectivity, total_time
+        );
     }
 }
 
@@ -555,7 +557,10 @@ pub fn start_network_manager_service() {
                         }
                     },
                     Err(err) => {
-                        error!("Starting the NetworkManager service state failed: {:?}", err);
+                        error!(
+                            "Starting the NetworkManager service state failed: {:?}",
+                            err
+                        );
                         process::exit(1);
                     },
                 }

@@ -1,5 +1,5 @@
-#![cfg_attr(feature="clippy", feature(plugin))]
-#![cfg_attr(feature="clippy", plugin(clippy))]
+#![cfg_attr(feature = "clippy", feature(plugin))]
+#![cfg_attr(feature = "clippy", plugin(clippy))]
 
 #[macro_use]
 extern crate log;
@@ -84,14 +84,14 @@ fn main() {
 
     let (exit_tx, exit_rx) = channel();
 
-    thread::spawn(move || { process_network_commands(&config, &exit_tx); });
+    thread::spawn(move || {
+        process_network_commands(&config, &exit_tx);
+    });
 
     match exit_rx.recv() {
-        Ok(result) => {
-            match result {
-                Err(reason) => error!("{}", reason),
-                Ok(_) => info!("Connection successfully established"),
-            }
+        Ok(result) => match result {
+            Err(reason) => error!("{}", reason),
+            Ok(_) => info!("Connection successfully established"),
         },
         Err(e) => error!("Exit receiver error: {}", e.description()),
     }
