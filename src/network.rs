@@ -4,12 +4,13 @@ use std::time::Duration;
 use std::sync::mpsc::{Sender, channel};
 use std::error::Error;
 use std::net::Ipv4Addr;
+use std::process::Command;
 
 use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connection, AccessPoint,
                       ConnectionState, ServiceState, Connectivity};
 
 use {exit, ExitResult};
-use config::Config;
+use config::{Config, load_resolv_conf};
 use dnsmasq::start_dnsmasq;
 use server::start_server;
 
@@ -589,4 +590,77 @@ fn stop_access_point(manager: &NetworkManager) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+pub fn set_ip_and_netmask(ip_address: &str, netmask: &str, interface_name: &str) -> Result<(), String> {
+
+    let ifconfig_str = "ifconfig ".to_string() + interface_name + ip_address + " netmask " + netmask;
+
+    //println!("Do the ifconfig command {}", ifconfig_str);
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg(ifconfig_str)
+        .output()
+        .expect("failed to execute process");
+
+    let out = output.stdout;
+    if out.len() == 0 {
+        return Ok(());
+    } else {
+        return Err(String::from_utf8(out).unwrap());
+    }
+}
+
+pub fn set_gateway(gateway: &str) -> Result<(), String> {
+
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg("route add default ")
+        .arg(gateway)
+        .output()
+        .expect("failed to execute process");
+
+    let out = output.stdout;
+    if out.len() == 0 {
+        return Ok(());
+    } else {
+        return Err(String::from_utf8(out).unwrap());
+    }
+}
+
+pub fn set_dns(dns: &str) -> Result<(), String> {
+
+    let resolv_str = match load_resolv_conf("/etc/resolv.conf") {
+        Ok(resolv) => resolv,
+        Err(resolv) => return Err("Couldn't read /etc/resolv.conf".to_string())
+    };
+
+    for line in resolv_str.lines() {
+        let offset = match line.find(&dns) {
+            Some(index) => index,
+            None => resolv_str.len(),
+        };
+        if offset != resolv_str.len() {
+            // if we found the entry, just return ok
+            return Ok(())
+        }
+    }
+
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg("echo nameserver ")
+        .arg(&dns)
+        .arg(" >> /etc/resolv.conf")
+        .output()
+        .expect("failed to update resolv.conf");
+
+    let out = output.stdout;
+    if out.len() == 0 {
+        return Ok(());
+    } else {
+        return Err(String::from_utf8(out).unwrap());
+    } 
+}
+
+pub fn get_network_settings() {
 }

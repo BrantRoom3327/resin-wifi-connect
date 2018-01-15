@@ -2,6 +2,8 @@ use std::sync::mpsc::{Sender, Receiver};
 use std::error::Error;
 use std::fmt;
 use std::net::Ipv4Addr;
+use std::str::FromStr;
+use std::process::Command;
 use serde_json;
 use path::PathBuf;
 use iron::prelude::*;
@@ -16,7 +18,7 @@ use cookie::{CookieJar, Cookie, Key, SameSite};
 use time;
 use config::*;
 use hbs::{Template, HandlebarsEngine, DirectorySource};
-use network::{NetworkCommand, NetworkCommandResponse};
+use network::{NetworkCommand, NetworkCommandResponse, set_ip_and_netmask, set_gateway, set_dns, get_network_settings};
 use {exit, ExitResult};
 
 #[derive(Debug)]
@@ -337,10 +339,49 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
     }
 
     if !ethernet_dhcp_enabled {
+        // validate the addresses.
+        let ipv4_ethernet_address = match Ipv4Addr::from_str(&ethernet_ip_address) {
+            Ok(eth) => eth,
+            Err(eth) => return Ok(Response::with((status::Unauthorized, "Bad ethernet address")))
+        };
+
+        let ipv4_subnet_mask = match Ipv4Addr::from_str(&ethernet_subnet_mask) {
+            Ok(eth) => eth,
+            Err(eth) => return Ok(Response::with((status::Unauthorized, "Bad subnet mask")))
+        };
+
+        let ipv4_gateway = match Ipv4Addr::from_str(&ethernet_gateway) {
+            Ok(eth) => eth,
+            Err(eth) => return Ok(Response::with((status::Unauthorized, "Bad gateway")))
+        };
+
+        let ipv4_dns = match Ipv4Addr::from_str(&ethernet_dns) {
+            Ok(eth) => eth,
+            Err(eth) => return Ok(Response::with((status::Unauthorized, "Bad DNS")))
+        };
+
+        match set_ip_and_netmask(&ethernet_ip_address, &ethernet_subnet_mask, "en0") {
+            Ok(()) => (),
+            Err(e) => return Ok(Response::with((status::InternalServerError, "Failed to set IP and netmask")))
+        };
+
+        match set_gateway(&ethernet_gateway) {
+            Ok(()) => (),
+            Err(e) => return Ok(Response::with((status::InternalServerError, "Failed to set gateway")))
+        };
+
+        match set_dns(&ethernet_dns) {
+            Ok(()) => (),
+            Err(e) => return Ok(Response::with((status::InternalServerError, "Failed to set dns")))
+        };
+       
+        // if we get this far, update the configuration, it was successful.
         cfg.ethernet_ip_address = ethernet_ip_address;
         cfg.ethernet_subnet_mask = ethernet_subnet_mask;
         cfg.ethernet_gateway = ethernet_gateway;
         cfg.ethernet_dns = ethernet_dns;
+    } else {
+        // TODO: enable DHCP on the ethernet interface.
     }
     
     let status = match write_diagnostics_config(&cfg) {
@@ -424,6 +465,8 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
             panic!("{:?}", config);
         }
     };
+
+    get_network_settings();
 
     let redirect_path = "http://".to_string() + &cfg.http_server_address + ROUTE_GET_CONFIG;
 

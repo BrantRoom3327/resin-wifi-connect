@@ -27,6 +27,7 @@ pub const STATUS_TEMPLATE_NAME: &str = "status";
 //required config and auth files for the server to validate connections and store persistent data.
 pub const AUTH_FILE: &str = "auth.json";
 pub const CFG_FILE: &str = "cfg.json";
+const DEFAULT_SD_COLLECTOR_INTERFACE: &str = "eth0";
 
 // routes
 pub const ROUTE_GET_CONFIG: &str = "/getconfig";
@@ -48,6 +49,7 @@ pub struct Config {
     pub dhcp_range: String,
     pub timeout: u64,
     pub ui_path: PathBuf,
+    pub sd_collector_interface: String,  //kcf, "eth0" or "eth1" etc
 }
 
 //KCF specific data storage
@@ -156,6 +158,14 @@ pub fn get_config() -> Config {
                 .help("Web UI location")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("sd-collector-interface")
+                .short("e")
+                .long("sd-collector-interface")
+                .value_name("sd_collector_interface")
+                .help("Ethernet device (e.g eth0) for collector")
+                .takes_value(true),
+        )
         .get_matches();
 
     let interface: Option<String> = matches.value_of("portal-interface").map_or_else(
@@ -185,6 +195,13 @@ pub fn get_config() -> Config {
         String::from,
     );
 
+    //kcf specific
+    let sd_collector_interface = matches.value_of("sd-collector-interface").map_or_else(
+        || env::var("SD_COLLECTOR_INTERFACE").unwrap_or_else(|_| DEFAULT_SD_COLLECTOR_INTERFACE.to_string()),
+        String::from,
+    );
+    println!("The collector interface: {}", &sd_collector_interface);
+
     // TODO: network_manager receives the timeout in seconds, should be ms instead.
     let timeout = u64::from_str(&matches.value_of("timeout").map_or_else(
         || env::var("CONNECT_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_MS.to_string()),
@@ -202,6 +219,7 @@ pub fn get_config() -> Config {
         dhcp_range: dhcp_range,
         timeout: timeout,
         ui_path: ui_path,
+        sd_collector_interface: sd_collector_interface,
     }
 }
 
@@ -265,6 +283,13 @@ pub fn load_auth(file_path: &str) -> Result<Auth, Error> {
     f.read_to_string(&mut data)?;
     let auth: Auth = serde_json::from_str(&data[..])?;
     Ok(auth)
+}
+
+pub fn load_resolv_conf(file_path: &str) -> Result<String, Error> {
+    let mut data = String::new();
+    let mut f = File::open(file_path)?;
+    f.read_to_string(&mut data)?;
+    Ok(data)
 }
 
 pub fn read_diagnostics_config() -> Result<SmartDiagnosticsConfig, Error> {
