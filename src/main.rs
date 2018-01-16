@@ -18,6 +18,7 @@ extern crate handlebars;
 extern crate handlebars_iron as hbs;
 extern crate cookie;
 extern crate time;
+extern crate rand;
 
 #[macro_use]
 extern crate serde_derive;

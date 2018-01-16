@@ -73,6 +73,9 @@ pub struct SmartDiagnosticsConfig {
     pub proxy_gateway: String,
     pub proxy_gateway_port: u16,
 
+    // master key used to generate cookie hashes.
+    pub cookie_key: String,
+
     // used as a cache right now, set at runtime on start.
     //TODO: find a better place to store this.
     pub http_server_address: String,

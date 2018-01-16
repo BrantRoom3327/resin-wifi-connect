@@ -20,6 +20,8 @@ use config::*;
 use hbs::{Template, HandlebarsEngine, DirectorySource};
 use network::{NetworkCommand, NetworkCommandResponse, set_ip_and_netmask, set_gateway, set_dns, get_network_settings};
 use {exit, ExitResult};
+use rand::*;
+use std::str;
 
 #[derive(Debug)]
 struct RequestSharedState {
@@ -147,6 +149,22 @@ pub fn start_server(
     // full http://<ip>:port path to server, using the file as a cache right now
     // Find a better way perhaps using Box<T> heap allocated mem or use persistent::State
     cfg.http_server_address = gateway.to_string() + ":" + &SERVER_PORT.to_string();
+
+    // make sure we have a valid cookie seed value.  Needs to be 256 bits.
+    // Since its stored as a string we convert 2 chars per string to our 32 bytes of data.
+    if cfg.cookie_key.len() != 64 { // 32 bytes of data.  2 chars per byte in hex.
+        println!("Generating a new cookie creator master key..");
+        let mut rng = thread_rng();
+        let mut array = vec![0; 8];
+        for i in 0..8 {
+            array[i] = rng.gen::<u32>();
+        }
+        let new_key = format!("{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}",
+            array[0], array[1], array[2], array[3], array[4], array[5], array[6], array[7]);
+
+        println!("New Key -> {} len {}", new_key, new_key.len());
+        cfg.cookie_key = new_key;
+    }
 
     let status = match write_diagnostics_config(&cfg) {
         Ok(s) => s,
@@ -401,7 +419,9 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
 pub fn get_config(req: &mut Request) -> IronResult<Response> {
 
     let headers = req.headers.to_string();
+ //   println!("Headers -> {}", headers);
     let mut cookie_str = String::new();
+    let cookie_prefix_len = "Cookie:".len();
 
     //TODO: try using a match guard
     for line in headers.lines() {
@@ -415,20 +435,14 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
         }
     }
 
-    if cookie_str.len() > 7 {
-        let c = Cookie::parse(&cookie_str[7..]).unwrap();
-
-        // FIXME: Do cookie validation, the name of it to start
-
-        //FIXME:Validate the cookie expire time (once its being set)
-
-    } else {
-        // FIXME: we need a page to send the user when things go wrong.  And display status 
-        // with the normal layout as well as a link back to the login page.
+    // FIXME: we need a page to send the user when things go wrong.  And display status 
+    // with the normal layout as well as a link back to the login page.
+    if cookie_str.len() < cookie_prefix_len {
         return Ok(Response::with((status::Unauthorized, "Not authorized.  Do you have cookies enabled for this site?")))
     }
 
-    // TODO: ok if we have a cookie, parse it
+    let c = Cookie::parse(&cookie_str[cookie_prefix_len..]).unwrap();
+
     let cfg = match read_diagnostics_config() {
         Ok(cfg) => cfg,
         Err(err) => {
@@ -436,7 +450,12 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
         }
     };
 
-    //println!("Server CFG proxy enabled {} cloud storage enabled {}", cfg.proxy_enabled, cfg.cloud_storage_enabled);
+    match validate_cookie(cfg.cookie_key.as_bytes(), &c) {
+        true => (),
+        false => {
+            return Ok(Response::with((status::Unauthorized, "Invalid login.  Make sure you are authenticated to use this site.")))
+        }
+    }
 
     let mut resp = Response::new();
     resp.set_mut(Template::new(CONFIG_TEMPLATE_NAME, cfg)).set_mut(status::Ok);
@@ -454,8 +473,10 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
 
     let creds = load_auth(AUTH_FILE).expect("Auth failed");
 
-    let auth_ok = if user == creds.username && pass == creds.password { true } 
-                  else { false };
+    let auth_ok = if user == creds.username && pass == creds.password 
+        { true } 
+    else
+        { false };
 
     // the http server address is stored in the config file right now.
     let cfg = match read_diagnostics_config() {
@@ -466,6 +487,7 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
         }
     };
 
+    //FIXME: Read from nic
     get_network_settings();
 
     let redirect_path = "http://".to_string() + &cfg.http_server_address + ROUTE_GET_CONFIG;
@@ -478,47 +500,8 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
     };
 
     if auth_ok {
-        // FIXME: figure out box<Key> or similar so that the key can be stored
-        // in some other structure and used for get requests.
-
-        println!("Create the cookie2!\n");
-        let key = Key::generate();
-        let mut jar = CookieJar::new();
-
-    /*
-        let mut cookie = Cookie::build(COOKIE_NAME, COOKIE_VALUE)
-            .secure(true)
-            .http_only(true)
-            .finish();
-        
-       
-        // should the encryption run on the cookie user and pass?
-        jar.private(&key).add(cookie);
-
-        assert_ne!(jar.get(COOKIE_NAME).unwrap().value(), COOKIE_VALUE);
-        assert_eq!(jar.private(&key).get(COOKIE_NAME).unwrap().value(), COOKIE_VALUE);
-       */
-       let mut cookie = Cookie::new(COOKIE_NAME, COOKIE_VALUE);
-       /*
-        let mut cookie = Cookie::build(COOKIE_NAME, COOKIE_VALUE)
-            .secure(true)
-            .http_only(true)
-            .finish();
-            */
-        // set expires time
-
-        // Setting expires is causing a failure..
-        /*
-        let mut now = time::now();
-        now.tm_hour += COOKIE_EXPIRES_HOURS;
-        cookie.set_expires(now);
-        */
-        cookie.set_same_site(SameSite::Strict);
-        
-        jar.private(&key).add(cookie);
-  
-        // set the cookie in the response headers.  There is probably a better way to do this...
-        resp.headers.append_raw("Set-Cookie", jar.get(COOKIE_NAME).unwrap().to_string().into_bytes());
+        let cookie_str = create_cookie(cfg.cookie_key.as_bytes());
+        resp.headers.append_raw("Set-Cookie", cookie_str.into_bytes());
     }
 
     println!("server response:\n{:?}", resp);
@@ -544,3 +527,62 @@ pub fn get_status(req: &mut Request) -> IronResult<Response> {
 pub fn exit_with_error2(exit_tx: &Sender<ExitResult>, error: String) {
     println!("failed a sender command err"); 
 }
+
+// FIXME : lifetime of Result<String, io::Error>
+fn create_cookie(cookie_key: &[u8]) -> String {
+    if cookie_key.len() != 64 {
+        panic!("create_cookie: The cookie master key is invalid at runtime!  This shouldn't happen!\n\n");
+    }
+    println!("Create a cookie2!\n");
+    let key = Key::from_master(cookie_key);
+    let mut jar = CookieJar::new();
+
+    //setup the actual cookie
+    //let mut cookie = Cookie::new(COOKIE_NAME, COOKIE_VALUE);
+    let mut cookie = Cookie::build(COOKIE_NAME, COOKIE_VALUE)
+       // .secure(true)
+        .http_only(true)
+        .finish();
+  
+    cookie.set_same_site(SameSite::Strict);
+    
+    //jar.private(&key).add(cookie);
+    jar.add(cookie);
+    jar.get(COOKIE_NAME).unwrap().to_string()
+}
+
+
+//TODO: Add cookie secure and database
+fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool {
+    if cookie_key.len() != 64 {
+        panic!("validate_cookie: The cookie master key is invalid at runtime!  This shouldn't happen!\n\n");
+    }
+
+    let (name, value) = cookie.name_value();
+    println!("Validate -> name {} cookie value {}", name, value);
+
+    let auth = if (COOKIE_NAME == name && COOKIE_VALUE == value) { true } else { false };
+
+    auth
+}
+
+/*
+  
+    // should the encryption run on the cookie user and pass?
+    jar.private(&key).add(cookie);
+
+    assert_ne!(jar.get(COOKIE_NAME).unwrap().value(), COOKIE_VALUE);
+    assert_eq!(jar.private(&key).get(COOKIE_NAME).unwrap().value(), COOKIE_VALUE);
+    */
+    /*
+    let mut cookie = Cookie::build(COOKIE_NAME, COOKIE_VALUE)
+        .secure(true)
+        .http_only(true)
+        .finish();
+        */
+    // set expires time
+
+    // Setting expires is causing a failure..
+    //let mut now = time::now();
+    //now.tm_hour += COOKIE_EXPIRES_HOURS;
+    //cookie.set_expires(now);
