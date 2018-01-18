@@ -16,6 +16,7 @@ use server::start_server;
 
 use server::exit_with_error2;
 
+#[derive(Debug)]
 pub enum NetworkCommand {
     Activate,
     Connect { ssid: String, passphrase: String },
@@ -33,8 +34,9 @@ pub fn process_network_commands2(config: &Config, exit_tx: &Sender<ExitResult>) 
     let gateway = config.gateway;
     let ui_path = config.ui_path.clone();
 
+    let collector_interface_clone = config.sd_collector_interface.clone();
     thread::spawn(move || {
-        start_server(gateway, server_rx, network_tx, exit_tx_server, &ui_path);
+        start_server(gateway, server_rx, network_tx, exit_tx_server, &ui_path, collector_interface_clone);
     });
 
     loop {
@@ -50,6 +52,7 @@ pub fn process_network_commands2(config: &Config, exit_tx: &Sender<ExitResult>) 
                 );
             },
         };
+        println!("command is {:?}", command);
     }
 }
 
@@ -91,8 +94,10 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
     let exit_tx_server = exit_tx.clone();
     let gateway = config.gateway;
     let ui_path = config.ui_path.clone();
+    let collector_interface_clone = config.sd_collector_interface.clone();
+
     thread::spawn(move || {
-        start_server(gateway, server_rx, network_tx, exit_tx_server, &ui_path);
+        start_server(gateway, server_rx, network_tx, exit_tx_server, &ui_path, collector_interface_clone);
     });
 
     loop {

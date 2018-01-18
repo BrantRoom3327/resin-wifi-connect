@@ -1,6 +1,3 @@
-extern crate serde;
-extern crate serde_json;
-
 use std::io::{ErrorKind, Error};
 use clap::{Arg, App};
 use std::env;
@@ -11,6 +8,7 @@ use std::ffi::OsStr;
 use std::io::prelude::*;
 use std::fs::File;
 use std::fs::OpenOptions;
+use serde_json;
 
 pub const SERVER_PORT: i32 = 8080;
 const DEFAULT_GATEWAY: &str = "192.168.42.1";
@@ -85,11 +83,6 @@ pub struct SmartDiagnosticsConfig {
 pub struct Auth{
     pub username: String,
     pub password: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct CloudURL{
-    url: String,
 }
 
 pub fn get_config() -> Config {
@@ -307,17 +300,17 @@ pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), E
 
     let mut f = match OpenOptions::new().write(true).truncate(true).open(CFG_FILE) {
         Ok(f) => f,
-        Err(e) => { return Err(Error::new(ErrorKind::Other, "Failed to open config file!")); }
+        Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to open config file!"))
     };
 
     let data = match serde_json::to_string(&config) {
         Ok(data) => data,
-        Err(e) => { return Err(Error::new(ErrorKind::Other, "Failed to create json!")); }
+        Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to create json!"))
     };
 
     let bytes_out = match f.write(data.as_bytes()) {
         Ok(bytes) => bytes,
-        Err(e) => { return Err(Error::new(ErrorKind::Other, "failed o write out data!")); }
+        Err(e) => return Err(Error::new(ErrorKind::Other, "failed o write out data!"))
     };
 
     Ok(())

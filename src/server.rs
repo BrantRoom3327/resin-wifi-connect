@@ -29,6 +29,7 @@ struct RequestSharedState {
     server_rx: Receiver<NetworkCommandResponse>,
     network_tx: Sender<NetworkCommand>,
     exit_tx: Sender<ExitResult>,
+    sd_collector_interface: String,  //KCF specific
 }
 
 impl typemap::Key for RequestSharedState {
@@ -135,6 +136,7 @@ pub fn start_server(
     network_tx: Sender<NetworkCommand>,
     exit_tx: Sender<ExitResult>,
     ui_path: &PathBuf,
+    sd_collector_interface: String,
 ) {
     let exit_tx_clone = exit_tx.clone();
 
@@ -168,9 +170,7 @@ pub fn start_server(
 
     let status = match write_diagnostics_config(&cfg) {
         Ok(s) => s,
-        Err(err) => {
-            panic!("{:?}", err);
-        }
+        Err(err) => panic!("{:?}", err)
     };
 
     let request_state = RequestSharedState {
@@ -178,6 +178,7 @@ pub fn start_server(
         server_rx: server_rx,
         network_tx: network_tx,
         exit_tx: exit_tx,
+        sd_collector_interface: sd_collector_interface,
     };
 
     let mut router = Router::new();
@@ -223,7 +224,11 @@ pub fn start_server(
 
 fn ssid(req: &mut Request) -> IronResult<Response> {
     debug!("Incoming `ssid` request");
-
+    println!("ROUTING SSID");
+    // commented out because we are not using it.  If 
+    // request is not handled properly and acked by process_network_commands()
+    // calls to get_request_state!() will deadlock due to the mutex lock being taken already.
+    /*
     let request_state = get_request_state!(req);
 
     if let Err(err) = request_state.network_tx.send(NetworkCommand::Activate) {
@@ -256,8 +261,10 @@ fn ssid(req: &mut Request) -> IronResult<Response> {
             )
         },
     };
-
     Ok(Response::with((status::Ok, access_points_json)))
+*/
+
+    Ok(Response::with((status::Ok, "".to_string())))
 }
 
 fn connect(req: &mut Request) -> IronResult<Response> {
@@ -378,7 +385,9 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
             Err(eth) => return Ok(Response::with((status::Unauthorized, "Bad DNS")))
         };
 
-        match set_ip_and_netmask(&ethernet_ip_address, &ethernet_subnet_mask, "en0") {
+        let state = get_request_state!(req);
+
+        match set_ip_and_netmask(&ethernet_ip_address, &ethernet_subnet_mask, &state.sd_collector_interface) {
             Ok(()) => (),
             Err(e) => return Ok(Response::with((status::InternalServerError, "Failed to set IP and netmask")))
         };
