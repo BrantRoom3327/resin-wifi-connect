@@ -32,6 +32,14 @@ struct RequestSharedState {
     sd_collector_interface: String,  //KCF specific
 }
 
+#[derive(Debug)]
+pub struct NetworkSettings {
+    pub ip_address: Ipv4Addr,
+    pub netmask: Ipv4Addr,
+    pub gateway: Ipv4Addr, 
+    pub dns: Ipv4Addr,
+}
+
 impl typemap::Key for RequestSharedState {
     type Value = RequestSharedState;
 }
@@ -452,7 +460,8 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
 
     let c = Cookie::parse(&cookie_str[cookie_prefix_len..]).unwrap();
 
-    let cfg = match read_diagnostics_config() {
+    // mutating this later, not saving it though
+    let mut cfg = match read_diagnostics_config() {
         Ok(cfg) => cfg,
         Err(err) => {
             return Err(IronError::new(err, status::InternalServerError));
@@ -465,6 +474,19 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
             return Ok(Response::with((status::Unauthorized, "Invalid login.  Make sure you are authenticated to use this site.")))
         }
     }
+
+    let state = get_request_state!(req);
+    let net_settings = match get_network_settings(&state.sd_collector_interface) {
+        Some(settings) => settings,
+        None => panic!("No network settings returned")
+    };
+
+    //NOTE: here overwrite the config we read from disk, we are not going to store it again.
+    // the purpose is to inject the network settings we read from get_network_settings()
+    cfg.ethernet_ip_address = format!("{}", net_settings.ip_address);
+    cfg.ethernet_subnet_mask = format!("{}", net_settings.netmask);
+    cfg.ethernet_gateway = format!("{}", net_settings.gateway);
+    cfg.ethernet_dns = format!("{}", net_settings.dns);
 
     let mut resp = Response::new();
     resp.set_mut(Template::new(CONFIG_TEMPLATE_NAME, cfg)).set_mut(status::Ok);
@@ -494,10 +516,7 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
             println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
             panic!("{:?}", config);
         }
-    };
-
-    //FIXME: Read from nic
-    get_network_settings();
+    };   
 
     let redirect_path = "http://".to_string() + &cfg.http_server_address + ROUTE_GET_CONFIG;
 
@@ -560,7 +579,6 @@ fn create_cookie(cookie_key: &[u8]) -> String {
     jar.get(COOKIE_NAME).unwrap().to_string()
 }
 
-
 //TODO: Add cookie secure and database
 fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool {
     if cookie_key.len() != 64 {
@@ -574,24 +592,3 @@ fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool {
 
     auth
 }
-
-/*
-  
-    // should the encryption run on the cookie user and pass?
-    jar.private(&key).add(cookie);
-
-    assert_ne!(jar.get(COOKIE_NAME).unwrap().value(), COOKIE_VALUE);
-    assert_eq!(jar.private(&key).get(COOKIE_NAME).unwrap().value(), COOKIE_VALUE);
-    */
-    /*
-    let mut cookie = Cookie::build(COOKIE_NAME, COOKIE_VALUE)
-        .secure(true)
-        .http_only(true)
-        .finish();
-        */
-    // set expires time
-
-    // Setting expires is causing a failure..
-    //let mut now = time::now();
-    //now.tm_hour += COOKIE_EXPIRES_HOURS;
-    //cookie.set_expires(now);

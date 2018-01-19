@@ -19,6 +19,8 @@ extern crate handlebars_iron as hbs;
 extern crate cookie;
 extern crate time;
 extern crate rand;
+extern crate regex;
+#[macro_use] extern crate lazy_static;
 
 #[macro_use]
 extern crate serde_derive;
