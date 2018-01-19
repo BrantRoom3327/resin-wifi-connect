@@ -21,6 +21,7 @@ const DEFAULT_UI_PATH: &str = "public";
 pub const HTTP_PUBLIC: &str = "./public/";
 pub const CONFIG_TEMPLATE_NAME: &str = "config";
 pub const STATUS_TEMPLATE_NAME: &str = "status";
+pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
 
 //required config and auth files for the server to validate connections and store persistent data.
 pub const AUTH_FILE: &str = "auth.json";
@@ -31,7 +32,7 @@ const DEFAULT_SD_COLLECTOR_INTERFACE: &str = "eth0";
 pub const ROUTE_GET_CONFIG: &str = "/getconfig";
 pub const ROUTE_SET_CONFIG: &str = "/setconfig";
 pub const ROUTE_AUTH: &str = "/auth";
-pub const ROUTE_SHOW_STATUS : &str = "/status";
+pub const ROUTE_SHOW_STATUS: &str = "/status";
 
 // cookie for auth
 pub const COOKIE_NAME: &str = "tastybiscuits";

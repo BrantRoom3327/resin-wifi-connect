@@ -97,7 +97,11 @@
 						</div>
 					</div>
 				</div>
-		
+
+				<div class="row-spacer">
+					<p>&nbsp;</p>
+				</div>
+				
 				<div class="page-header">
 					<h3>Proxy Settings</h3>
 				</div>
@@ -142,11 +146,33 @@
 				</div>
 
 				<div class="row spacer">
-					<button type="submit" id="updateDataSource" class='btn btn-success col-lg-3'>Update Configuration</button>
+					<button type="submit" id="updateDataSource" class='btn btn-success col-md-3'>Update Configuration</button>
 				</div>
 				
 				</div>
 			</form>
+
+			<!-- jump to configure the wifi settings -->
+			<form class="form form-horizontal" id='ssid-form' action='/ssid' method='get'>
+				<div class="container theme-showcase" role="main"></div>
+				<div class="page-header">
+					<h3>&nbsp;</h3>
+				</div>
+
+				<div class="col-xs-2"><label>Wifi Settings</label></div>
+					<button type="submit" id="changeWifiSettings" class='btn btn-success col-sm-3'>Change</button>
+				</div>
+			</form>
+
+			<div class="row col-xs-12">
+				<div class="row-spacer">
+					<p>&nbsp;</p>
+				</div>
+	
+				<div class="row-spacer">
+					<p>&nbsp;</p>
+				</div>
+			</div>
 
 		<script>
 			$(function() {

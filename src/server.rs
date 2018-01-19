@@ -230,13 +230,26 @@ pub fn start_server(
     }
 }
 
+#[cfg(feature = "localbuild")]
 fn ssid(req: &mut Request) -> IronResult<Response> {
-    debug!("Incoming `ssid` request");
-    println!("ROUTING SSID");
-    // commented out because we are not using it.  If 
-    // request is not handled properly and acked by process_network_commands()
-    // calls to get_request_state!() will deadlock due to the mutex lock being taken already.
-    /*
+    println!("NO Hotspot running in localbuild.  So no settings will be shown.");
+
+    let cfg = match read_diagnostics_config() {
+        Ok(config) => config,
+        Err(config) => {
+            println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
+            panic!("{:?}", config);
+        }
+    };
+
+    let mut resp = Response::new();
+    resp.set_mut(Template::new(WIFI_TEMPLATE_NAME, cfg)).set_mut(status::Ok);
+    Ok(resp)
+}
+
+#[cfg(not(feature = "localbuild"))]
+fn ssid(req: &mut Request) -> IronResult<Response> {
+    // used to retrieve ssid's from network manager 
     let request_state = get_request_state!(req);
 
     if let Err(err) = request_state.network_tx.send(NetworkCommand::Activate) {
@@ -270,9 +283,6 @@ fn ssid(req: &mut Request) -> IronResult<Response> {
         },
     };
     Ok(Response::with((status::Ok, access_points_json)))
-*/
-
-    Ok(Response::with((status::Ok, "".to_string())))
 }
 
 fn connect(req: &mut Request) -> IronResult<Response> {
@@ -436,7 +446,6 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
 pub fn get_config(req: &mut Request) -> IronResult<Response> {
 
     let headers = req.headers.to_string();
- //   println!("Headers -> {}", headers);
     let mut cookie_str = String::new();
     let cookie_prefix_len = "Cookie:".len();
 
