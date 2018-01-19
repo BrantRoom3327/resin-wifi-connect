@@ -49,26 +49,26 @@
 						<input type="hidden" id="ethernet-select" name="ethernet-select">
 					</div>
 
-					<div class="input-group col-xs-10" id="ethernet" class="col-md-3" name="ethernet">
-						<div class="row ethernet col-xs-12">
+					<div class="input-group ethernet col-xs-10" class="col-md-3">
+						<div class="row col-xs-12">
 							<div class="col-md-2"><label for="ethernet_ip_address">IP Address</label></div>
 							<div class="col-xs-6">
 								<input type="text" class="form-control" name="ethernet_ip_address" value="{{ethernet_ip_address}}">
 							</div>
 						</div>
-						<div class="row ethernet col-xs-12">
+						<div class="row col-xs-12">
 							<div class="col-md-2"><label for="ethernet_subnet_mask">Subnet Mask</label></div>
 							<div class="col-xs-6">
 								<input type="text" class="form-control" name="ethernet_subnet_mask" value="{{ethernet_subnet_mask}}">
 							</div>
 						</div>
-						<div class="row ethernet col-xs-12">
+						<div class="row col-xs-12">
 							<div class="col-md-2"><label for="ethernet_gateway">Gateway</label></div>
 							<div class="col-xs-6">
 								<input type="text" class="form-control" name="ethernet_gateway" value="{{ethernet_gateway}}">
 							</div>
 						</div>
-						<div class="row ethernet col-xs-12">
+						<div class="row col-xs-12">
 							<div class="col-md-2"><label for="ethernet_dns">DNS</label></div>
 							<div class="col-xs-6">
 								<input type="text" class="form-control" name="ethernet_dns" value="{{ethernet_dns}}">
@@ -209,12 +209,12 @@
 				};
 
 				// default setup of hide/show for cloud storage
-				if($('input[name=ethernet]').is(':checked')){
-					var v = $('input[name=ethernet]:checked').val();
-					if (v==1) {
-						$('.ethernet').show();
-					} else {
+				if($('input[name=ethernet_dhcp_enabled]').is(':checked')){
+					var v = $('input[name=ethernet_dhcp_enabled]:checked').val();
+					if (v==1) { // 1 value means dhcp is enabled.
 						$('.ethernet').hide();
+					} else {
+						$('.ethernet').show();
 					}
 				};
 			});

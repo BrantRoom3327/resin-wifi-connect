@@ -695,14 +695,11 @@ pub fn get_ip_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
         .output()
         .expect("failed to execute `ifconfig`");
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-
     lazy_static! {
         static ref IP_RE: Regex =  Regex::new(r#"(?m)^.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
     }
 
-    let mut ip_addr : Ipv4Addr = "127.0.0.1".parse().unwrap();
-    
+    let stdout = String::from_utf8(output.stdout).unwrap();
     for cap in IP_RE.captures_iter(&stdout) {
         if let &Ok(addr) = &cap[2].parse::<Ipv4Addr>() {
             return Some(addr);
@@ -712,7 +709,7 @@ pub fn get_ip_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     None
 }
 
-// FIXME: try to merge with a single call in get_ip_for_adapter()
+#[cfg(target_os = "macos")]
 pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     let output = Command::new("ifconfig")
         .arg(adapter)
@@ -722,13 +719,10 @@ pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     let stdout = String::from_utf8(output.stdout).unwrap();
 
     lazy_static! {
-        // Run one then the other on the nic to see what gold comes up
-        // on macos netmask is in hex, on linux its in ipv4 format.  Why Apple, why?
-        static ref NETMASK_RE_MAC: Regex =  Regex::new(r#"(?m)^.*netmask 0x([A-Za-z0-9]*).*$"#).unwrap();
-        static ref NETMASK_RE_LINUX: Regex =  Regex::new(r#"(?m)^.*inet (netmask:)?(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+        static ref NETMASK_RE: Regex = Regex::new(r#"(?m)^.*netmask 0x([A-Za-z0-9]*).*$"#).unwrap();
     }
 
-    for cap in NETMASK_RE_MAC.captures_iter(&stdout) {
+    for cap in NETMASK_RE.captures_iter(&stdout) {
         if cap[1].len() != 8 {
             break;
         }
@@ -736,6 +730,28 @@ pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
         let netmask = u32::from_str_radix(&cap[1], 16).unwrap();
         let address = Ipv4Addr::from(netmask);
         return Some(address);
+    }
+
+    None
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
+    lazy_static! {
+        static ref NETMASK_RE: Regex = Regex::new(r#"(?m)^.*inet (netmask )?(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+    }
+
+    let output = Command::new("ifconfig")
+        .arg(adapter)
+        .output()
+        .expect("failed to execute `ifconfig`");
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    for cap in NETMASK_RE.captures_iter(&stdout) {
+        println!("cap line in netmask linux -> {:?}", cap);
+        if let &Ok(addr) = &cap[1].parse::<Ipv4Addr>() {
+            return Some(addr);
+        }
     }
 
     None
