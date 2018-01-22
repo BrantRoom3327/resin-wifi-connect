@@ -63,20 +63,18 @@ pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
         .expect("failed to execute `ifconfig`");
 
     lazy_static! {
-        static ref GATEWAY_RE: Regex = Regex::new(r#"(?m)(^nameserver)(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+        static ref GATEWAY_RE: Regex = Regex::new(r#"^nameserver(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
     }
     let mut dns_entries = Vec::new();
 
     let stdout = String::from_utf8(output.stdout).unwrap();
     for cap in GATEWAY_RE.captures_iter(&stdout) {
-        println!("Nameservers {:?}", cap);
         if let &Ok(addr) = &cap[2].parse::<Ipv4Addr>() {
-            dns_entries.push_back(addr);
-            //return Some(addr);
+            dns_entries.push(addr);
         }
     }
 
-    if dns_entries.length() > 0 {
+    if dns_entries.len() > 0 {
         Some(dns_entries)
     } else {
         None

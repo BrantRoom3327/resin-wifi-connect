@@ -6,8 +6,7 @@ use std::error::Error;
 use std::process::Command;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use regex::Regex;
-use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connection, AccessPoint,
-                      ConnectionState, ServiceState, Connectivity};
+use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connection, AccessPoint, ConnectionState, ServiceState, Connectivity};
 use {exit, ExitResult};
 use config::{Config, load_resolv_conf};
 use dnsmasq::start_dnsmasq;
@@ -59,3 +58,6 @@ pub fn get_gateway_for_adapter(_adapter: &str) -> Option<Ipv4Addr> {
     None
 }
 
+pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
+    None
+}

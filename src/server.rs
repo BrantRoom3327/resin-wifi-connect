@@ -37,7 +37,7 @@ pub struct NetworkSettings {
     pub ip_address: Ipv4Addr,
     pub netmask: Ipv4Addr,
     pub gateway: Ipv4Addr, 
-    pub dns: Ipv4Addr,
+    pub dns: Vec<Ipv4Addr>,
 }
 
 impl typemap::Key for RequestSharedState {
@@ -336,7 +336,7 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         let ethernet_ip_address = get_param!(params, "ethernet_ip_address", String);
         let ethernet_subnet_mask = get_param!(params, "ethernet_subnet_mask", String);
         let ethernet_gateway = get_param!(params, "ethernet_gateway", String);
-        let ethernet_dns = get_param!(params, "ethernet_dns", String);
+        let ethernet_dns = get_param!(params, "ethernet_dns", Vec<String>);
 
         (cloud_storage_enabled, destination_address, 
             proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port,
@@ -354,7 +354,7 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
     println!("ethernet_ip_address {}", ethernet_ip_address);
     println!("ethernet_subnet_mask {}", ethernet_subnet_mask);
     println!("ethernet_gateway {}", ethernet_gateway);
-    println!("ethernet_dns {}", ethernet_dns);
+    println!("ethernet_dns {:?}", ethernet_dns);
 
     //
     // FIXME: Take a mutex.
@@ -398,10 +398,12 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
             _ => return Ok(Response::with((status::Unauthorized, "Bad gateway")))
         };
 
+        /*
         let ipv4_dns = match Ipv4Addr::from_str(&ethernet_dns) {
             Ok(eth) => eth,
             _ => return Ok(Response::with((status::Unauthorized, "Bad DNS")))
         };
+        */
 
         let state = get_request_state!(req);
 
@@ -415,10 +417,12 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
             _ => return Ok(Response::with((status::InternalServerError, "Failed to set gateway")))
         };
 
+        /*
         match set_dns(&ethernet_dns) {
             Ok(()) => (),
             _ => return Ok(Response::with((status::InternalServerError, "Failed to set dns")))
         };
+        */
        
         // if we get this far, update the configuration, it was successful.
         cfg.ethernet_ip_address = ethernet_ip_address;
@@ -489,11 +493,11 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
         Some(settings) => settings,
         None => {
             println!("No network settings returned");
-            NetworkSettings{ip_address: "0.0.0.0".parse().unwrap(),
-                                            netmask: "0.0.0.0".parse().unwrap(),
-                                            gateway: "0.0.0.0".parse().unwrap(),
-                                            dns: "0.0.0.0".parse().unwrap()}
-                        
+                NetworkSettings{ip_address: "0.0.0.0".parse().unwrap(),
+                                netmask: "0.0.0.0".parse().unwrap(),
+                                gateway: "0.0.0.0".parse().unwrap(),
+                                dns: Vec::new(),
+                                }
         }
     };
 
@@ -502,7 +506,11 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
     cfg.ethernet_ip_address = format!("{}", net_settings.ip_address);
     cfg.ethernet_subnet_mask = format!("{}", net_settings.netmask);
     cfg.ethernet_gateway = format!("{}", net_settings.gateway);
-    cfg.ethernet_dns = format!("{}", net_settings.dns);
+
+    // convert ipv4addr to strings
+    for entry in net_settings.dns {
+        cfg.ethernet_dns.push(format!("{}", entry))
+    }
 
     let mut resp = Response::new();
     resp.set_mut(Template::new(CONFIG_TEMPLATE_NAME, cfg)).set_mut(status::Ok);

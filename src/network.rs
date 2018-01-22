@@ -4,7 +4,7 @@ use std::time::Duration;
 use std::sync::mpsc::{Sender, channel};
 use std::error::Error;
 use std::process::Command;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{Ipv4Addr};
 use regex::Regex;
 
 use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connection, AccessPoint,
@@ -18,10 +18,10 @@ use server::start_server;
 use server::{exit_with_error2, NetworkSettings};
 
 #[cfg(target_os = "linux")]
-use linux::{get_gateway_for_adapter, get_netmask_for_adapter};
+use linux::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
 
 #[cfg(target_os = "macos")]
-use macos::{get_gateway_for_adapter, get_netmask_for_adapter};
+use macos::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
 
 #[derive(Debug)]
 pub enum NetworkCommand {
@@ -687,13 +687,13 @@ pub fn get_network_settings(adapter: &str) -> Option<NetworkSettings> {
         Some(gateway) => gateway,
         None => return None,
     };
+    let dns = match get_dns_entries() {
+        Some(dns) => dns,
+        None => return None,
+    };
 
-    let settings = NetworkSettings{ip_address, netmask, gateway,
-                             dns: "0.0.0.0".parse().unwrap()
-                             };
-
+    let settings = NetworkSettings{ip_address, netmask, gateway, dns};
     println!("Returing network settings => {:?}", settings);
-
     Some(settings)
 }
 

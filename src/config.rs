@@ -63,7 +63,7 @@ pub struct SmartDiagnosticsConfig {
     pub ethernet_ip_address: String,
     pub ethernet_subnet_mask: String,
     pub ethernet_gateway: String,
-    pub ethernet_dns: String,
+    pub ethernet_dns: Vec<String>,
 
     // proxy settings
     pub proxy_enabled: bool,
