@@ -385,39 +385,39 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         // validate the addresses.
         let ipv4_ethernet_address = match Ipv4Addr::from_str(&ethernet_ip_address) {
             Ok(eth) => eth,
-            Err(eth) => return Ok(Response::with((status::Unauthorized, "Bad ethernet address")))
+            _ => return Ok(Response::with((status::Unauthorized, "Bad ethernet address")))
         };
 
         let ipv4_subnet_mask = match Ipv4Addr::from_str(&ethernet_subnet_mask) {
             Ok(eth) => eth,
-            Err(eth) => return Ok(Response::with((status::Unauthorized, "Bad subnet mask")))
+            _ => return Ok(Response::with((status::Unauthorized, "Bad subnet mask")))
         };
 
         let ipv4_gateway = match Ipv4Addr::from_str(&ethernet_gateway) {
             Ok(eth) => eth,
-            Err(eth) => return Ok(Response::with((status::Unauthorized, "Bad gateway")))
+            _ => return Ok(Response::with((status::Unauthorized, "Bad gateway")))
         };
 
         let ipv4_dns = match Ipv4Addr::from_str(&ethernet_dns) {
             Ok(eth) => eth,
-            Err(eth) => return Ok(Response::with((status::Unauthorized, "Bad DNS")))
+            _ => return Ok(Response::with((status::Unauthorized, "Bad DNS")))
         };
 
         let state = get_request_state!(req);
 
         match set_ip_and_netmask(&ethernet_ip_address, &ethernet_subnet_mask, &state.sd_collector_interface) {
             Ok(()) => (),
-            Err(e) => return Ok(Response::with((status::InternalServerError, "Failed to set IP and netmask")))
+            _ => return Ok(Response::with((status::InternalServerError, "Failed to set IP and netmask")))
         };
 
         match set_gateway(&ethernet_gateway) {
             Ok(()) => (),
-            Err(e) => return Ok(Response::with((status::InternalServerError, "Failed to set gateway")))
+            _ => return Ok(Response::with((status::InternalServerError, "Failed to set gateway")))
         };
 
         match set_dns(&ethernet_dns) {
             Ok(()) => (),
-            Err(e) => return Ok(Response::with((status::InternalServerError, "Failed to set dns")))
+            _ => return Ok(Response::with((status::InternalServerError, "Failed to set dns")))
         };
        
         // if we get this far, update the configuration, it was successful.

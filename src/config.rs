@@ -80,15 +80,17 @@ pub struct SmartDiagnosticsConfig {
     pub http_server_address: String,
 }
 
+/*
 #[derive(Serialize)]
-pub struct SDCollectorProxySettings {
-    pub Enabled: bool,
-    pub Server: String,
-    pub Port: u16,
-    pub UseDefaultCredientials: bool,
-    pub User: String,
-    pub Password: String,
+pub struct sd_collector_proxy_settings {
+    pub enabled: bool,
+    pub server: String,
+    pub port: u16,
+    pub use_default_credientials: bool,
+    pub user: String,
+    pub password: String,
 }
+*/
 
 #[derive(Serialize, Deserialize)]
 pub struct Auth{

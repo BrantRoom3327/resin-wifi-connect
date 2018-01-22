@@ -31,6 +31,12 @@ mod server;
 mod dnsmasq;
 mod logger;
 
+#[cfg(target_os = "linux")]
+mod linux;
+
+#[cfg(target_os = "macos")]
+mod macos;
+
 use std::error::Error;
 use std::path;
 use std::thread;
