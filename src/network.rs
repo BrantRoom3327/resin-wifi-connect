@@ -760,7 +760,7 @@ pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
 }
 
 #[cfg(target_os = "macos")]
-pub fn get_gateway_for_adapter(adapter: &str) ->Option<Ipv4Addr> {
+pub fn get_gateway_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     let output = Command::new("route")
         .arg("-n")
         .arg("get")
@@ -782,7 +782,7 @@ pub fn get_gateway_for_adapter(adapter: &str) ->Option<Ipv4Addr> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn get_gateway_for_adapter(adapter: &str) ->Option<Ipv4Addr> {
+pub fn get_gateway_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     //let command = format!("ip route | grep {} | grep default | grep -o -P  '(?<=via ).*(?= dev)'");
     let output = Command::new("ip")
         .arg("route")
@@ -804,3 +804,30 @@ pub fn get_gateway_for_adapter(adapter: &str) ->Option<Ipv4Addr> {
     None
 }
 
+#[cfg(target_os = "linux")]
+pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
+    let output = Command::new("cat")
+        .arg("/etc/resolv.conf")
+        .output()
+        .expect("failed to execute `ifconfig`");
+
+    lazy_static! {
+        static ref GATEWAY_RE: Regex = Regex::new(r#"(?m)(^nameserver)(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+    }
+    let mut dns_entries = Vec::new();
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    for cap in GATEWAY_RE.captures_iter(&stdout) {
+        println!("Nameservers {:?}", cap);
+        if let &Ok(addr) = &cap[2].parse::<Ipv4Addr>() {
+            dns_entries.push_back(addr);
+            //return Some(addr);
+        }
+    }
+
+    if dns_entries.length() > 0 {
+        Some(dns_entries)
+    } else {
+        None
+    }
+}
