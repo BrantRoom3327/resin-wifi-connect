@@ -677,13 +677,16 @@ pub fn get_network_settings(adapter: &str) -> Option<NetworkSettings> {
         Some(netmask) => netmask,
         None => return None,
     };
+    let gateway = match get_gateway_for_adapter(adapter) {
+        Some(gateway) => gateway,
+        None => return None,
+    };
 
-    let settings = NetworkSettings{ip_address, netmask,
-                             gateway: "0.0.0.0".parse().unwrap(), 
+    let settings = NetworkSettings{ip_address, netmask, gateway,
                              dns: "0.0.0.0".parse().unwrap()
                              };
 
-    //println!("Returing network settings => {:?}", settings);
+    println!("Returing network settings => {:?}", settings);
 
     Some(settings)
 }
@@ -755,5 +758,49 @@ pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     }
 
     None
+}
+
+#[cfg(target_os = "macos")]
+pub fn get_gateway_for_adapter(adapter: &str) ->Option<Ipv4Addr> {
+    let output = Command::new("route")
+        .arg("-n")
+        .arg("get")
+        .arg("default")
+        .output()
+        .expect("failed to execute `route -n get default`");
+
+    lazy_static! {
+        static ref GATEWAY_RE: Regex = Regex::new(r#"(?m).*(gateway: )(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+    }
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    for cap in GATEWAY_RE.captures_iter(&stdout) {
+        if let &Ok(addr) = &cap[2].parse::<Ipv4Addr>() {
+            return Some(addr);
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_gateway_for_adapter(adapter: &str) ->Option<Ipv4Addr> {
+    //let command = format!("ip route | grep {} | grep default | grep -o -P  '(?<=via ).*(?= dev)'");
+    let output = Command::new("ip")
+        .arg("route")
+        .arg("show")
+        .output()
+        .expect("failed to execute `ifconfig`");
+
+    lazy_static! {
+        static ref GATEWAY_RE: Regex = Regex::new(r#"(?m).*(gateway: )(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+    }
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    if let Ok(addr) = stdout.parse::<Ipv4Addr>() {
+        println!("Stdout gave me {:?}", stdout);
+        Some(addr)
+    } else {
+        None
+    }
 }
 

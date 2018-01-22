@@ -487,7 +487,14 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
     let state = get_request_state!(req);
     let net_settings = match get_network_settings(&state.sd_collector_interface) {
         Some(settings) => settings,
-        None => panic!("No network settings returned")
+        None => {
+            println!("No network settings returned");
+            NetworkSettings{ip_address: "0.0.0.0".parse().unwrap(),
+                                            netmask: "0.0.0.0".parse().unwrap(),
+                                            gateway: "0.0.0.0".parse().unwrap(),
+                                            dns: "0.0.0.0".parse().unwrap()}
+                        
+        }
     };
 
     //NOTE: here overwrite the config we read from disk, we are not going to store it again.
