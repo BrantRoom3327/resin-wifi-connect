@@ -60,16 +60,16 @@ pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
     let output = Command::new("cat")
         .arg("/etc/resolv.conf")
         .output()
-        .expect("failed to execute `ifconfig`");
+        .expect("failed to execute `cat /etc/resolv.conf`");
 
     lazy_static! {
-        static ref GATEWAY_RE: Regex = Regex::new(r#"^nameserver(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+        static ref GATEWAY_RE: Regex = Regex::new(r#"(?m)^nameserver\s*(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
     }
     let mut dns_entries = Vec::new();
 
     let stdout = String::from_utf8(output.stdout).unwrap();
     for cap in GATEWAY_RE.captures_iter(&stdout) {
-        if let &Ok(addr) = &cap[2].parse::<Ipv4Addr>() {
+        if let &Ok(addr) = &cap[1].parse::<Ipv4Addr>() {
             dns_entries.push(addr);
         }
     }

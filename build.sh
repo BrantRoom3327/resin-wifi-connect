@@ -40,8 +40,8 @@ else
     #run a debug build, default
     cargo build --features="localbuild"
     cp target/debug/wifi-connect .
-    #./wifi-connect --portal-interface=en0
     # if you need to set by ip address instead.
-    ./wifi-connect --portal-gateway=192.168.1.148 --sd-collector-interface=en0
+    ./wifi-connect --portal-gateway=192.168.1.169 --sd-collector-interface=wlp2s0
+    #./wifi-connect --portal-gateway=192.168.1.148 --sd-collector-interface=en0
 fi
 #    scripts/local-build.sh x86_64-unknown-linux-gnu

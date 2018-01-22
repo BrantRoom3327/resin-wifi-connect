@@ -715,6 +715,7 @@ pub fn get_ip_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
         }
     }
 
+    println!("No IPAddress or gateway found for: {}", adapter);
     None
 }
 
