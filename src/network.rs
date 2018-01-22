@@ -751,8 +751,7 @@ pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
 
     let stdout = String::from_utf8(output.stdout).unwrap();
     for cap in NETMASK_RE.captures_iter(&stdout) {
-        println!("cap line in netmask linux -> {:?}", cap);
-        if let &Ok(addr) = &cap[1].parse::<Ipv4Addr>() {
+        if let &Ok(addr) = &cap[2].parse::<Ipv4Addr>() {
             return Some(addr);
         }
     }
@@ -792,15 +791,16 @@ pub fn get_gateway_for_adapter(adapter: &str) ->Option<Ipv4Addr> {
         .expect("failed to execute `ifconfig`");
 
     lazy_static! {
-        static ref GATEWAY_RE: Regex = Regex::new(r#"(?m).*(gateway: )(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+        static ref GATEWAY_RE: Regex = Regex::new(r#"(?m).*(via )(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
     }
 
     let stdout = String::from_utf8(output.stdout).unwrap();
-    if let Ok(addr) = stdout.parse::<Ipv4Addr>() {
-        println!("Stdout gave me {:?}", stdout);
-        Some(addr)
-    } else {
-        None
+    for cap in GATEWAY_RE.captures_iter(&stdout) {
+        if let &Ok(addr) = &cap[2].parse::<Ipv4Addr>() {
+            return Some(addr);
+        }
     }
+
+    None
 }
 
