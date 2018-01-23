@@ -75,7 +75,7 @@ pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
     }
 
     if dns_entries.len() > 0 {
-        Some(dns_entries.dedup())
+        Some(dns_entries)
     } else {
         None
     }
