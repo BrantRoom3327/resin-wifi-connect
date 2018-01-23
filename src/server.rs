@@ -336,7 +336,7 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         let ethernet_ip_address = get_param!(params, "ethernet_ip_address", String);
         let ethernet_subnet_mask = get_param!(params, "ethernet_subnet_mask", String);
         let ethernet_gateway = get_param!(params, "ethernet_gateway", String);
-        let ethernet_dns = get_param!(params, "ethernet_dns", Vec<String>);
+        let ethernet_dns = get_param!(params, "ethernet_dns", String);
 
         (cloud_storage_enabled, destination_address, 
             proxy_enabled, proxy_login, proxy_password, proxy_gateway, proxy_gateway_port,
@@ -398,12 +398,19 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
             _ => return Ok(Response::with((status::Unauthorized, "Bad gateway")))
         };
 
-        /*
-        let ipv4_dns = match Ipv4Addr::from_str(&ethernet_dns) {
-            Ok(eth) => eth,
-            _ => return Ok(Response::with((status::Unauthorized, "Bad DNS")))
-        };
-        */
+        let vec_dns: Vec<&str> = ethernet_dns.split(',').collect();
+        let mut ethernet_dns_entries = Vec::new();
+        for v in vec_dns {
+            let trimmed_ip = v.trim();
+            match trimmed_ip.parse::<Ipv4Addr>() {
+                Ok(entry) => ethernet_dns_entries.push(entry),
+                Err(e) => {
+                    println!("Invalid dns entry {} {:?}", v, e);
+                    return Err(IronError::new(e, status::InternalServerError))
+                }
+            };
+        } 
+        ethernet_dns_entries.dedup();
 
         let state = get_request_state!(req);
 
@@ -417,18 +424,21 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
             _ => return Ok(Response::with((status::InternalServerError, "Failed to set gateway")))
         };
 
-        /*
-        match set_dns(&ethernet_dns) {
+        match set_dns(&ethernet_dns_entries) {
             Ok(()) => (),
             _ => return Ok(Response::with((status::InternalServerError, "Failed to set dns")))
         };
-        */
        
         // if we get this far, update the configuration, it was successful.
         cfg.ethernet_ip_address = ethernet_ip_address;
         cfg.ethernet_subnet_mask = ethernet_subnet_mask;
         cfg.ethernet_gateway = ethernet_gateway;
-        cfg.ethernet_dns = ethernet_dns;
+
+        // convert to strings for assignment
+        cfg.ethernet_dns = [].to_vec();
+        for ns in ethernet_dns_entries {
+            cfg.ethernet_dns.push(ns.to_string());
+        }
     } else {
         // TODO: enable DHCP on the ethernet interface.
     }
@@ -509,7 +519,7 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
 
     // convert ipv4addr to strings
     for entry in net_settings.dns {
-        cfg.ethernet_dns.push(format!("{}", entry))
+        cfg.ethernet_dns.push(entry.to_string());
     }
 
     let mut resp = Response::new();

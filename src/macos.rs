@@ -1,16 +1,8 @@
-use std::thread;
-use std::process;
-use std::time::Duration;
-use std::sync::mpsc::{Sender, channel};
 use std::error::Error;
 use std::process::Command;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{Ipv4Addr};
 use regex::Regex;
-use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connection, AccessPoint, ConnectionState, ServiceState, Connectivity};
-use {exit, ExitResult};
 use config::{Config, load_resolv_conf};
-use dnsmasq::start_dnsmasq;
-use server::start_server;
 
 pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     let output = Command::new("ifconfig")
@@ -59,5 +51,7 @@ pub fn get_gateway_for_adapter(_adapter: &str) -> Option<Ipv4Addr> {
 }
 
 pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
-    None
+    let mut dns = Vec::new();
+    dns.push("8.8.8.8".parse::<Ipv4Addr>().unwrap());
+    Some(dns)
 }

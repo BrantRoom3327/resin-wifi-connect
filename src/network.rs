@@ -616,14 +616,15 @@ pub fn set_ip_and_netmask(ip_address: &str, netmask: &str, interface_name: &str)
         .expect("failed to execute process");
 
     let out = output.stdout;
-    if out.len() == 0 {
-        return Ok(());
-    } else {
+    if out.len() != 0 {
         return Err(String::from_utf8(out).unwrap());
     }
+    Ok(())
 }
 
 pub fn set_gateway(gateway: &str) -> Result<(), String> {
+
+    // TODO: Make sure the route does not already exist, if so its a noop.
 
     let output = Command::new("sh")
         .arg("-c")
@@ -633,45 +634,53 @@ pub fn set_gateway(gateway: &str) -> Result<(), String> {
         .expect("failed to execute process");
 
     let out = output.stdout;
-    if out.len() == 0 {
-        return Ok(());
-    } else {
+    if out.len() != 0 {
         return Err(String::from_utf8(out).unwrap());
     }
+    Ok(())
 }
 
-pub fn set_dns(dns: &str) -> Result<(), String> {
+pub fn set_dns(dns_entries: &Vec<Ipv4Addr>) -> Result<(), String> {
 
-    let resolv_str = match load_resolv_conf("/etc/resolv.conf") {
-        Ok(resolv) => resolv,
-        Err(resolv) => return Err("Couldn't read /etc/resolv.conf".to_string())
+    // only track new entries to be inserted, first drop any dups by comparing against resolv.conf
+    // then insert only new entries at the end (if any)
+    let current_dns_entries = match get_dns_entries() {
+        Some(cur) => cur,
+        None => return Err("Couldn't read /etc/resolv.conf".to_string())
     };
 
-    for line in resolv_str.lines() {
-        let offset = match line.find(&dns) {
-            Some(index) => index,
-            None => resolv_str.len(),
-        };
-        if offset != resolv_str.len() {
-            // if we found the entry, just return ok
-            return Ok(())
+    let mut new_entries = Vec::new();
+    for entry in dns_entries {
+        let mut found = false;
+        for cur in &current_dns_entries {
+            if cur == entry {
+                found = true;
+                break;
+            }
+        }
+        if found == false {
+            new_entries.push(entry);
         }
     }
 
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg("echo nameserver ")
-        .arg(&dns)
-        .arg(" >> /etc/resolv.conf")
-        .output()
-        .expect("failed to update resolv.conf");
+    println!("Insert these {:?}", new_entries);
 
-    let out = output.stdout;
-    if out.len() == 0 {
-        return Ok(());
-    } else {
-        return Err(String::from_utf8(out).unwrap());
-    } 
+    //FIXME: Get all the 'namespace xxx.xxx.xxx.xxx' entries in a single vec and insert in one call.
+    for entry in new_entries {
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg("echo nameserver ")
+            .arg(entry.to_string())
+            .arg(" >> /etc/resolv.conf")
+            .output()
+            .expect("failed to update resolv.conf");
+
+        let out = output.stdout;
+        if out.len() != 0 {
+            return Err(String::from_utf8(out).unwrap());
+        } 
+    }
+    Ok(())
 }
 
 pub fn get_network_settings(adapter: &str) -> Option<NetworkSettings> {
@@ -692,9 +701,7 @@ pub fn get_network_settings(adapter: &str) -> Option<NetworkSettings> {
         None => return None,
     };
 
-    let settings = NetworkSettings{ip_address, netmask, gateway, dns};
-    println!("Returing network settings => {:?}", settings);
-    Some(settings)
+    Some(NetworkSettings{ip_address, netmask, gateway, dns})
 }
 
 // get ip and netmask for the adapter
@@ -718,4 +725,3 @@ pub fn get_ip_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     println!("No IPAddress or gateway found for: {}", adapter);
     None
 }
-
