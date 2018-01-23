@@ -71,7 +71,7 @@
 						<div class="row col-xs-12">
 							<div class="col-md-2"><label for="ethernet_dns">DNS</label></div>
 							<div class="col-xs-6">
-								<input type="text" class="form-control" name="ethernet_dns" value="{{#each ethernet_dns}}{{this}}, {{/each}}">
+								<input type="text" class="form-control" name="ethernet_dns" value="{{#each ethernet_dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
 							</div>
 						</div>
 					</div>
