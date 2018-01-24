@@ -1,8 +1,6 @@
-use std::error::Error;
 use std::process::Command;
 use std::net::{Ipv4Addr};
 use regex::Regex;
-use config::{Config, load_resolv_conf};
 
 pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     let output = Command::new("ifconfig")

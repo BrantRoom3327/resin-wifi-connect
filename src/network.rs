@@ -11,7 +11,7 @@ use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connectio
                       ConnectionState, ServiceState, Connectivity};
 
 use {exit, ExitResult};
-use config::{Config, load_resolv_conf};
+use config::{Config};
 use dnsmasq::start_dnsmasq;
 use server::start_server;
 

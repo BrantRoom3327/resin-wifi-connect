@@ -3,8 +3,7 @@ use std::error::Error;
 use std::fmt;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
-use std::process::Command;
-use serde_json;
+//use std::process::Command;
 use path::PathBuf;
 use iron::prelude::*;
 use iron::{Iron, Request, Response, IronResult, status, typemap, IronError, Url, AfterMiddleware, headers};
@@ -15,7 +14,6 @@ use mount::Mount;
 use persistent::{Write};
 use params::{Params, FromValue};
 use cookie::{CookieJar, Cookie, Key, SameSite};
-use time;
 use config::*;
 use hbs::{Template, HandlebarsEngine, DirectorySource};
 use network::{NetworkCommand, NetworkCommandResponse, set_ip_and_netmask, set_gateway, set_dns, get_network_settings};
@@ -149,7 +147,7 @@ pub fn start_server(
 ) {
     let exit_tx_clone = exit_tx.clone();
 
-    let mut cfg = match read_diagnostics_config() {
+    let mut cfg = match load_diagnostics_config_file(CFG_FILE) {
         Ok(config) => config,
         Err(config) => {
             println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
@@ -233,7 +231,7 @@ pub fn start_server(
 fn ssid(req: &mut Request) -> IronResult<Response> {
     println!("NO Hotspot running in localbuild.  So no settings will be shown.");
 
-    let cfg = match read_diagnostics_config() {
+    let cfg = match load_diagnostics_config_file(CFG_FILE) {
         Ok(config) => config,
         Err(config) => {
             println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
@@ -358,7 +356,7 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
     //
     // FIXME: Take a mutex.
     //
-    let mut cfg = match read_diagnostics_config() {
+    let mut cfg = match load_diagnostics_config_file(CFG_FILE) {
         Ok(cfg) => cfg,
         Err(err) => {
             return Err(IronError::new(err, status::InternalServerError));
@@ -483,7 +481,7 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
     let c = Cookie::parse(&cookie_str[cookie_prefix_len..]).unwrap();
 
     // mutating this later, not saving it though
-    let mut cfg = match read_diagnostics_config() {
+    let mut cfg = match load_diagnostics_config_file(CFG_FILE) {
         Ok(cfg) => cfg,
         Err(err) => {
             return Err(IronError::new(err, status::InternalServerError));
@@ -535,7 +533,7 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
         (user, pass)
     };
 
-    let creds = load_auth(AUTH_FILE).expect("Auth failed");
+    let creds = load_auth_file(AUTH_FILE).expect("Auth failed");
 
     let auth_ok = if user == creds.username && pass == creds.password 
         { true } 
@@ -543,7 +541,7 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
         { false };
 
     // the http server address is stored in the config file right now.
-    let cfg = match read_diagnostics_config() {
+    let cfg = match load_diagnostics_config_file(CFG_FILE) {
         Ok(config) => config,
         Err(config) => {
             println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
@@ -573,7 +571,7 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
 pub fn get_status(req: &mut Request) -> IronResult<Response> {
 
     /// create a live serde cfg object with all the status info
-    let cfg = match read_diagnostics_config() {
+    let cfg = match load_diagnostics_config_file(CFG_FILE) {
         Ok(config) => config,
         Err(config) => {
             println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
@@ -622,7 +620,11 @@ fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool {
     let (name, value) = cookie.name_value();
     println!("Validate -> name {} cookie value {}", name, value);
 
-    let auth = if (COOKIE_NAME == name && COOKIE_VALUE == value) { true } else { false };
+    let auth = if (COOKIE_NAME == name && COOKIE_VALUE == value) {
+        true
+    } else {
+        false
+    };
 
     auth
 }

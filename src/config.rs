@@ -280,7 +280,7 @@ fn get_install_ui_path() -> Option<PathBuf> {
 //
 //
 
-pub fn load_auth(file_path: &str) -> Result<Auth, Error> {
+pub fn load_auth_file(file_path: &str) -> Result<Auth, Error> {
     let mut data = String::new();
     let mut f = File::open(file_path)?;
     f.read_to_string(&mut data)?;
@@ -288,19 +288,19 @@ pub fn load_auth(file_path: &str) -> Result<Auth, Error> {
     Ok(auth)
 }
 
-pub fn load_resolv_conf(file_path: &str) -> Result<String, Error> {
+pub fn load_diagnostics_config_file(filename: &str) -> Result<SmartDiagnosticsConfig, Error> {
+    let mut data = String::new();
+    let mut f = File::open(filename)?;
+    f.read_to_string(&mut data)?;
+    let cfg: SmartDiagnosticsConfig = serde_json::from_str(&data[..])?;
+    Ok(cfg)
+}
+
+pub fn load_file_as_string(file_path: &str) -> Result<String, Error> {
     let mut data = String::new();
     let mut f = File::open(file_path)?;
     f.read_to_string(&mut data)?;
     Ok(data)
-}
-
-pub fn read_diagnostics_config() -> Result<SmartDiagnosticsConfig, Error> {
-    let mut data = String::new();
-    let mut f = File::open(CFG_FILE)?;
-    f.read_to_string(&mut data)?;
-    let cfg: SmartDiagnosticsConfig = serde_json::from_str(&data[..])?;
-    Ok(cfg)
 }
 
 pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), Error> {
