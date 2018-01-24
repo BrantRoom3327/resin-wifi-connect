@@ -74,13 +74,8 @@ pub struct SmartDiagnosticsConfig {
 
     // master key used to generate cookie hashes.
     pub cookie_key: String,
-
-    // used as a cache right now, set at runtime on start.
-    //TODO: find a better place to store this.
-    pub http_server_address: String,
 }
 
-/*
 #[derive(Serialize)]
 pub struct sd_collector_proxy_settings {
     pub enabled: bool,
@@ -90,7 +85,6 @@ pub struct sd_collector_proxy_settings {
     pub user: String,
     pub password: String,
 }
-*/
 
 #[derive(Serialize, Deserialize)]
 pub struct Auth{

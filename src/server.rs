@@ -30,6 +30,7 @@ struct RequestSharedState {
     network_tx: Sender<NetworkCommand>,
     exit_tx: Sender<ExitResult>,
     sd_collector_interface: String,  //KCF specific
+    http_server_address: String, //KCF specific
 }
 
 #[derive(Debug)]
@@ -156,10 +157,6 @@ pub fn start_server(
         }
     };
 
-    // full http://<ip>:port path to server, using the file as a cache right now
-    // Find a better way perhaps using Box<T> heap allocated mem or use persistent::State
-    cfg.http_server_address = gateway.to_string() + ":" + &SERVER_PORT.to_string();
-
     // make sure we have a valid cookie seed value.  Needs to be 256 bits.
     // Since its stored as a string we convert 2 chars per string to our 32 bytes of data.
     if cfg.cookie_key.len() != 64 { // 32 bytes of data.  2 chars per byte in hex.
@@ -187,6 +184,7 @@ pub fn start_server(
         network_tx: network_tx,
         exit_tx: exit_tx,
         sd_collector_interface: sd_collector_interface,
+        http_server_address: gateway.to_string() + ":" + &SERVER_PORT.to_string(),
     };
 
     let mut router = Router::new();
@@ -215,17 +213,18 @@ pub fn start_server(
         panic!("{}", r);
     }
 
-    info!("Starting HTTP server on http://{}", cfg.http_server_address);
+    let server_address_clone = request_state.http_server_address.clone();
+    info!("Starting HTTP server on http://{}", server_address_clone);
 
     let mut chain = Chain::new(assets);
     chain.link(Write::<RequestSharedState>::both(request_state));
     chain.link_after(RedirectMiddleware);
     chain.link_after(hbse);
 
-    if let Err(e) = Iron::new(chain).http(&cfg.http_server_address) {
+    if let Err(e) = Iron::new(chain).http(&server_address_clone) {
         exit(
             &exit_tx_clone,
-            format!("Cannot start HTTP server on '{}': {}", &cfg.http_server_address, e.description()),
+            format!("Cannot start HTTP server on '{}': {}", &server_address_clone, e.description()),
         );
     }
 }
@@ -381,6 +380,8 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         cfg.proxy_gateway_port = proxy_gateway_port;
     }
 
+    let state = get_request_state!(req);
+
     if !ethernet_dhcp_enabled {
         // validate the addresses.
         let ipv4_ethernet_address = match Ipv4Addr::from_str(&ethernet_ip_address) {
@@ -412,8 +413,6 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         } 
         ethernet_dns_entries.dedup();
 
-        let state = get_request_state!(req);
-
         match set_ip_and_netmask(&ethernet_ip_address, &ethernet_subnet_mask, &state.sd_collector_interface) {
             Ok(()) => (),
             _ => return Ok(Response::with((status::InternalServerError, "Failed to set IP and netmask")))
@@ -428,7 +427,7 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
             Ok(()) => (),
             _ => return Ok(Response::with((status::InternalServerError, "Failed to set dns")))
         };
-       
+
         // if we get this far, update the configuration, it was successful.
         cfg.ethernet_ip_address = ethernet_ip_address;
         cfg.ethernet_subnet_mask = ethernet_subnet_mask;
@@ -450,10 +449,10 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         }
     };
 
-    let full_http_address = "http://".to_string() + &cfg.http_server_address + ROUTE_SHOW_STATUS;
+    let show_status_route = "http://".to_string() + &state.http_server_address + ROUTE_SHOW_STATUS;
 
     // redirect back to login page on success
-    let url = Url::parse(&full_http_address).unwrap();
+    let url = Url::parse(&show_status_route).unwrap();
     Ok(Response::with((status::Found, Redirect(url.clone()))))
 }
 
@@ -550,11 +549,12 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
             println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
             panic!("{:?}", config);
         }
-    };   
+    };
 
-    let redirect_path = "http://".to_string() + &cfg.http_server_address + ROUTE_GET_CONFIG;
+    let state = get_request_state!(req); //for getting http server address
+    let get_config_route = "http://".to_string() + &state.http_server_address + ROUTE_GET_CONFIG;
 
-    let url = Url::parse(&redirect_path).unwrap();
+    let url = Url::parse(&get_config_route).unwrap();
 
     let mut resp = match auth_ok {
         true => Response::with((status::Found, Redirect(url.clone()))),
