@@ -26,7 +26,15 @@ pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
 //required config and auth files for the server to validate connections and store persistent data.
 pub const AUTH_FILE: &str = "auth.json";
 pub const CFG_FILE: &str = "cfg.json";
+
+//sd collector info/settings
 const DEFAULT_SD_COLLECTOR_INTERFACE: &str = "eth0";
+pub const SD_COLLECTOR_XML_FILE: &str = "collectorsettings.xml";
+pub const PROMETHEUS_TAG_START: &str = "<PrometheusUrl>";
+pub const PROMETHEUS_TAG_END: &str = "</PrometheusUrl>";
+pub const PROXYSETTINGS_TAG_START: &str = "<ProxySettings>";
+pub const PROXYSETTINGS_TAG_END: &str = "</ProxySettings>";
+pub const SETTINGS_TAG_START: &str = "<Settings>";
 
 // routes
 pub const ROUTE_GET_CONFIG: &str = "/getconfig";
@@ -78,12 +86,12 @@ pub struct SmartDiagnosticsConfig {
 
 #[derive(Serialize)]
 pub struct sd_collector_proxy_settings {
-    pub enabled: bool,
-    pub server: String,
-    pub port: u16,
-    pub use_default_credientials: bool,
-    pub user: String,
-    pub password: String,
+    pub Enabled: bool,
+    pub Server: String,
+    pub Port: u16,
+    pub UseDefaultCredentials: bool,
+    pub User: String,
+    pub Password: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -317,9 +325,18 @@ pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), E
 
     let bytes_out = match f.write(data.as_bytes()) {
         Ok(bytes) => bytes,
-        Err(e) => return Err(Error::new(ErrorKind::Other, "failed o write out data!"))
+        Err(e) => return Err(Error::new(ErrorKind::Other, "failed to write out data!"))
     };
 
     Ok(())
 }
 
+pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
+    let haystack_len = haystack.len(); 
+    let offset = haystack.find(needle).unwrap_or(haystack_len);
+    if offset != haystack_len {
+        return Some(offset);
+    } else {
+        return None;
+    }
+} 

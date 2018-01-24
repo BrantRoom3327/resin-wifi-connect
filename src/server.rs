@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fmt;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
+use serde_json;
 //use std::process::Command;
 use path::PathBuf;
 use iron::prelude::*;
@@ -436,6 +437,10 @@ fn set_config(req: &mut Request) -> IronResult<Response> {
         for ns in ethernet_dns_entries {
             cfg.ethernet_dns.push(ns.to_string());
         }
+
+        //update the sd collecto xml file
+        update_sd_collector_xml(&cfg);
+
     } else {
         // TODO: enable DHCP on the ethernet interface.
     }
@@ -460,12 +465,8 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
     let mut cookie_str = String::new();
     let cookie_prefix_len = "Cookie:".len();
 
-    //TODO: try using a match guard
     for line in headers.lines() {
-        let offset = match line.find("Cookie:") {
-            Some(index) => index,
-            None => headers.len(),
-        };
+        let offset = line.find("Cookie:").unwrap_or(headers.len());
         if offset != headers.len() {
             cookie_str = line.to_string();
             break;
@@ -627,4 +628,73 @@ fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool {
     };
 
     auth
+}
+
+// instead of wiping the line, wipe the data between begin and end tags and insert new.
+fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) {
+
+    let mut xml_file = match load_file_as_string(SD_COLLECTOR_XML_FILE) {
+        Ok(xml) => xml,
+        Err(e) => {
+            return;
+        }
+    };
+    //println!("XML at start\n{}", xml_file);
+
+    let prometheus_start = match find_offset_in_string(&xml_file, PROMETHEUS_TAG_START) {
+        Some(start) => start + PROMETHEUS_TAG_START.to_string().len(),
+        None => { 
+            return;
+        }
+    };
+
+    let prometheus_end = match find_offset_in_string(&xml_file, PROMETHEUS_TAG_END) {
+        Some(end) => end,
+        None => { 
+            return;
+        }
+    };
+
+    let drained_of_prometheus: String = xml_file.drain(prometheus_start..prometheus_end).collect();
+    
+    //now inject the data after the start tag.
+    xml_file.insert_str(prometheus_start, &cfg.data_destination_url);
+
+    let proxy_settings_start = match find_offset_in_string(&xml_file, PROXYSETTINGS_TAG_START) {
+        Some(start) => start + PROXYSETTINGS_TAG_START.to_string().len(),
+        None => { 
+            return;
+        }
+    };
+
+    let proxy_settings_end = match find_offset_in_string(&xml_file, PROXYSETTINGS_TAG_END) {
+        Some(end) => end,
+        None => {
+            return;
+        }
+    };
+
+    let drained_of_settings: String = xml_file.drain(proxy_settings_start..proxy_settings_end).collect();
+
+    // now inject the data, starting at the end of the start tag
+    let mut collector_settings = sd_collector_proxy_settings {
+        Enabled: cfg.proxy_enabled,
+        Server: cfg.proxy_gateway.clone(),
+        Port: cfg.proxy_gateway_port,
+        UseDefaultCredentials: false,
+        User: cfg.proxy_login.clone(),
+        Password: cfg.proxy_password.clone(),
+    };
+    
+    let collector_string = match serde_json::to_string(&collector_settings) {
+        Ok(json) => json,
+        Err(err) => {
+            panic!("Serialization didn't happen for collector settings!")
+        },
+    };
+
+    xml_file.insert_str(proxy_settings_start, &collector_string);
+    //println!("xml at end\n{}", xml_file);
+
+    println!("Fixme write the file out");
 }
