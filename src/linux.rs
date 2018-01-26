@@ -6,13 +6,12 @@ use std::error::Error;
 use std::process::Command;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use regex::Regex;
-use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connection, AccessPoint,
-                      ConnectionState, ServiceState, Connectivity};
+use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connection, AccessPoint, ConnectionState, ServiceState, Connectivity};
 use {exit, ExitResult};
-use config::{Config, load_resolv_conf};
+use config::Config;
 use dnsmasq::start_dnsmasq;
 use server::start_server;
-use server::{exit_with_error2, NetworkSettings};
+use kcf::*;
 
 pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     lazy_static! {

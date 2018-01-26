@@ -1,52 +1,18 @@
-use std::io::{ErrorKind, Error};
-use clap::{Arg, App};
+use clap::{App, Arg};
 use std::env;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use std::path::PathBuf;
 use std::ffi::OsStr;
-use std::io::prelude::*;
-use std::fs::File;
-use std::fs::OpenOptions;
-use serde_json;
+use kcf::*;
 
-pub const SERVER_PORT: i32 = 8080;
 const DEFAULT_GATEWAY: &str = "192.168.42.1";
 const DEFAULT_DHCP_RANGE: &str = "192.168.42.2,192.168.42.254";
 const DEFAULT_SSID: &str = "QuarterMaster";
 const DEFAULT_TIMEOUT_MS: &str = "15000";
 const DEFAULT_UI_PATH: &str = "public";
 
-// this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are stripped for runtime
-pub const HTTP_PUBLIC: &str = "./public/";
-pub const CONFIG_TEMPLATE_NAME: &str = "config";
-pub const STATUS_TEMPLATE_NAME: &str = "status";
-pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
-
-//required config and auth files for the server to validate connections and store persistent data.
-pub const AUTH_FILE: &str = "auth.json";
-pub const CFG_FILE: &str = "cfg.json";
-
-//sd collector info/settings
-const DEFAULT_SD_COLLECTOR_INTERFACE: &str = "eth0";
-pub const SD_COLLECTOR_XML_FILE: &str = "collectorsettings.xml";
-pub const PROMETHEUS_TAG_START: &str = "<PrometheusUrl>";
-pub const PROMETHEUS_TAG_END: &str = "</PrometheusUrl>";
-pub const PROXYSETTINGS_TAG_START: &str = "<ProxySettings>";
-pub const PROXYSETTINGS_TAG_END: &str = "</ProxySettings>";
-pub const SETTINGS_TAG_START: &str = "<Settings>";
-
-// routes
-pub const ROUTE_GET_CONFIG: &str = "/getconfig";
-pub const ROUTE_SET_CONFIG: &str = "/setconfig";
-pub const ROUTE_AUTH: &str = "/auth";
-pub const ROUTE_SHOW_STATUS: &str = "/status";
-
-// cookie for auth
-pub const COOKIE_NAME: &str = "tastybiscuits";
-pub const COOKIE_VALUE: &str = "lemonShortbread";
-pub const COOKIE_EXPIRES_HOURS: i32 = 1;
-
+#[derive(Clone)]
 pub struct Config {
     pub interface: Option<String>,
     pub ssid: String,
@@ -57,47 +23,6 @@ pub struct Config {
     pub timeout: u64,
     pub ui_path: PathBuf,
     pub sd_collector_interface: String,  //kcf, "eth0" or "eth1" etc
-}
-
-//KCF specific data storage
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SmartDiagnosticsConfig {
-    // cloud storage settings
-    pub cloud_storage_enabled: bool,
-    pub data_destination_url: String,
-
-    // sd collector ip address settings.
-    pub ethernet_dhcp_enabled: bool,
-    pub ethernet_ip_address: String,
-    pub ethernet_subnet_mask: String,
-    pub ethernet_gateway: String,
-    pub ethernet_dns: Vec<String>,
-
-    // proxy settings
-    pub proxy_enabled: bool,
-    pub proxy_login: String,
-    pub proxy_password: String,
-    pub proxy_gateway: String,
-    pub proxy_gateway_port: u16,
-
-    // master key used to generate cookie hashes.
-    pub cookie_key: String,
-}
-
-#[derive(Serialize)]
-pub struct sd_collector_proxy_settings {
-    pub Enabled: bool,
-    pub Server: String,
-    pub Port: u16,
-    pub UseDefaultCredentials: bool,
-    pub User: String,
-    pub Password: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Auth{
-    pub username: String,
-    pub password: String,
 }
 
 pub fn get_config() -> Config {
@@ -281,62 +206,3 @@ fn get_install_ui_path() -> Option<PathBuf> {
 
     None
 }
-
-//
-//
-// KCF section
-//
-//
-
-pub fn load_auth_file(file_path: &str) -> Result<Auth, Error> {
-    let mut data = String::new();
-    let mut f = File::open(file_path)?;
-    f.read_to_string(&mut data)?;
-    let auth: Auth = serde_json::from_str(&data[..])?;
-    Ok(auth)
-}
-
-pub fn load_diagnostics_config_file(filename: &str) -> Result<SmartDiagnosticsConfig, Error> {
-    let mut data = String::new();
-    let mut f = File::open(filename)?;
-    f.read_to_string(&mut data)?;
-    let cfg: SmartDiagnosticsConfig = serde_json::from_str(&data[..])?;
-    Ok(cfg)
-}
-
-pub fn load_file_as_string(file_path: &str) -> Result<String, Error> {
-    let mut data = String::new();
-    let mut f = File::open(file_path)?;
-    f.read_to_string(&mut data)?;
-    Ok(data)
-}
-
-pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), Error> {
-
-    let mut f = match OpenOptions::new().write(true).truncate(true).open(CFG_FILE) {
-        Ok(f) => f,
-        Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to open config file!"))
-    };
-
-    let data = match serde_json::to_string(&config) {
-        Ok(data) => data,
-        Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to create json!"))
-    };
-
-    let bytes_out = match f.write(data.as_bytes()) {
-        Ok(bytes) => bytes,
-        Err(e) => return Err(Error::new(ErrorKind::Other, "failed to write out data!"))
-    };
-
-    Ok(())
-}
-
-pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
-    let haystack_len = haystack.len(); 
-    let offset = haystack.find(needle).unwrap_or(haystack_len);
-    if offset != haystack_len {
-        return Some(offset);
-    } else {
-        return None;
-    }
-} 

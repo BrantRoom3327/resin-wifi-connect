@@ -1,27 +1,15 @@
 use std::thread;
 use std::process;
 use std::time::Duration;
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{channel, Sender};
 use std::error::Error;
-use std::process::Command;
-use std::net::{Ipv4Addr};
-use regex::Regex;
-
-use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connection, AccessPoint,
-                      ConnectionState, ServiceState, Connectivity};
-
+use std::net::Ipv4Addr;
+use network_manager::{AccessPoint, Connection, ConnectionState, Connectivity, Device, DeviceType, DeviceState, NetworkManager, ServiceState};
 use {exit, ExitResult};
-use config::{Config};
+use config::Config;
 use dnsmasq::start_dnsmasq;
 use server::start_server;
-
-use server::{exit_with_error2, NetworkSettings};
-
-#[cfg(target_os = "linux")]
-use linux::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
-
-#[cfg(target_os = "macos")]
-use macos::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
+use kcf::*;
 
 #[derive(Debug)]
 pub enum NetworkCommand {
@@ -602,126 +590,4 @@ fn stop_access_point(manager: &NetworkManager) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-pub fn set_ip_and_netmask(ip_address: &str, netmask: &str, interface_name: &str) -> Result<(), String> {
-
-    let ifconfig_str = "ifconfig ".to_string() + interface_name + ip_address + " netmask " + netmask;
-
-    //println!("Do the ifconfig command {}", ifconfig_str);
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg(ifconfig_str)
-        .output()
-        .expect("failed to execute process");
-
-    let out = output.stdout;
-    if out.len() != 0 {
-        return Err(String::from_utf8(out).unwrap());
-    }
-    Ok(())
-}
-
-pub fn set_gateway(gateway: &str) -> Result<(), String> {
-
-    // TODO: Make sure the route does not already exist, if so its a noop.
-
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg("route add default ")
-        .arg(gateway)
-        .output()
-        .expect("failed to execute process");
-
-    let out = output.stdout;
-    if out.len() != 0 {
-        return Err(String::from_utf8(out).unwrap());
-    }
-    Ok(())
-}
-
-pub fn set_dns(dns_entries: &Vec<Ipv4Addr>) -> Result<(), String> {
-
-    // only track new entries to be inserted, first drop any dups by comparing against resolv.conf
-    // then insert only new entries at the end (if any)
-    let current_dns_entries = match get_dns_entries() {
-        Some(cur) => cur,
-        None => return Err("Couldn't read /etc/resolv.conf".to_string())
-    };
-
-    let mut new_entries = Vec::new();
-    for entry in dns_entries {
-        let mut found = false;
-        for cur in &current_dns_entries {
-            if cur == entry {
-                found = true;
-                break;
-            }
-        }
-        if found == false {
-            new_entries.push(entry);
-        }
-    }
-
-    println!("Insert these {:?}", new_entries);
-
-    //FIXME: Get all the 'namespace xxx.xxx.xxx.xxx' entries in a single vec and insert in one call.
-    for entry in new_entries {
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg("echo nameserver ")
-            .arg(entry.to_string())
-            .arg(" >> /etc/resolv.conf")
-            .output()
-            .expect("failed to update resolv.conf");
-
-        let out = output.stdout;
-        if out.len() != 0 {
-            return Err(String::from_utf8(out).unwrap());
-        } 
-    }
-    Ok(())
-}
-
-pub fn get_network_settings(adapter: &str) -> Option<NetworkSettings> {
-    let ip_address = match get_ip_for_adapter(adapter) {
-        Some(ip_address) => ip_address,
-        None => return None,
-    };
-    let netmask = match get_netmask_for_adapter(adapter) {
-        Some(netmask) => netmask,
-        None => return None,
-    };
-    let gateway = match get_gateway_for_adapter(adapter) {
-        Some(gateway) => gateway,
-        None => return None,
-    };
-    let dns = match get_dns_entries() {
-        Some(dns) => dns,
-        None => return None,
-    };
-
-    Some(NetworkSettings{ip_address, netmask, gateway, dns})
-}
-
-// get ip and netmask for the adapter
-pub fn get_ip_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
-    let output = Command::new("ifconfig")
-        .arg(adapter)
-        .output()
-        .expect("failed to execute `ifconfig`");
-
-    lazy_static! {
-        static ref IP_RE: Regex =  Regex::new(r#"(?m)^.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
-    }
-
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    for cap in IP_RE.captures_iter(&stdout) {
-        if let &Ok(addr) = &cap[2].parse::<Ipv4Addr>() {
-            return Some(addr);
-        }
-    }
-
-    println!("No IPAddress or gateway found for: {}", adapter);
-    None
 }

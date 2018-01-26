@@ -38,7 +38,7 @@ lto = true
 features = ["secure", "percent-encode"]
 
 [features]
-localbuild = []
+no_hotspot = []
 watch = ["handlebars-iron/watch"]
 
 

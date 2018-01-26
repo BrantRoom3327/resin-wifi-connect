@@ -27,9 +27,10 @@ extern crate serde_derive;
 
 mod config;
 mod network;
-mod server;
+#[macro_use] mod server;
 mod dnsmasq;
 mod logger;
+mod kcf;
 
 #[cfg(target_os = "linux")]
 mod linux;
@@ -55,7 +56,7 @@ pub fn exit(exit_tx: &Sender<ExitResult>, error: String) {
 }
 
 // this is the main used for local builds, not in docker container.
-#[cfg(feature = "localbuild")]
+#[cfg(feature = "no_hotspot")]
 fn main() {
     logger::init();
 
@@ -79,7 +80,7 @@ fn main() {
 }
 
 // the main used for the docker container in production
-#[cfg(not(feature = "localbuild"))]
+#[cfg(not(feature = "no_hotspot"))]
 fn main() {
     logger::init();
 
