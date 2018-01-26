@@ -48,5 +48,5 @@ else
     cargo build --features="no_hotspot"
     cp target/debug/wifi-connect .
     # if you need to set by ip address instead.
-    ./wifi-connect --portal-gateway=192.168.1.148 --sd-collector-interface=en0
+    ./wifi-connect --portal-gateway=192.168.1.169 --sd-collector-interface=docker0
 fi

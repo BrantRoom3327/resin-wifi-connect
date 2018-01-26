@@ -19,7 +19,6 @@ extern crate rand;
 extern crate regex;
 extern crate mount;
 #[macro_use] extern crate lazy_static;
-#[macro_use] extern crate cfg_if;
 #[macro_use] extern crate serde_derive;
 
 mod config;
