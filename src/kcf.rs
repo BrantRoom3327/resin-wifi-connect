@@ -28,7 +28,7 @@ use macos::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
 
 // this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are stripped for runtime
 pub const SERVER_PORT: i32 = 8080;
-pub const HTTP_PUBLIC: &str = "./public/";
+pub const HTTP_PUBLIC: &str = "./ui"; //FIXME: Follow the config param
 pub const CONFIG_TEMPLATE_NAME: &str = "config";
 pub const STATUS_TEMPLATE_NAME: &str = "status";
 pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
@@ -136,7 +136,6 @@ pub fn create_cookie(cookie_key: &[u8]) -> String {
     if cookie_key.len() != 64 {
         panic!("create_cookie: The cookie master key is invalid at runtime!  This shouldn't happen!\n\n");
     }
-    println!("Create a cookie2!\n");
     let key = Key::from_master(cookie_key);
     let mut jar = CookieJar::new();
 

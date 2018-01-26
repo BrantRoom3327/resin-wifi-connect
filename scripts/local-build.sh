@@ -8,6 +8,7 @@ if [ -z "$1" ]; then
 fi
 
 TARGET=$1
+ARCH=$2
 
 cross() {
     docker run -it --rm -v $PWD:/work $TARGET "$@"

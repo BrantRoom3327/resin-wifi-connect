@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+
 use std::env;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
@@ -8,20 +9,19 @@ use kcf::*;
 
 const DEFAULT_GATEWAY: &str = "192.168.42.1";
 const DEFAULT_DHCP_RANGE: &str = "192.168.42.2,192.168.42.254";
-const DEFAULT_SSID: &str = "QuarterMaster";
-const DEFAULT_TIMEOUT_MS: &str = "15000";
-const DEFAULT_UI_PATH: &str = "public";
+const DEFAULT_SSID: &str = "WiFi Connect";
+const DEFAULT_ACTIVITY_TIMEOUT: &str = "0";
+const DEFAULT_UI_DIRECTORY: &str = "ui";
 
 #[derive(Clone)]
 pub struct Config {
     pub interface: Option<String>,
     pub ssid: String,
     pub passphrase: Option<String>,
-    pub clear: bool,
     pub gateway: Ipv4Addr,
     pub dhcp_range: String,
-    pub timeout: u64,
-    pub ui_path: PathBuf,
+    pub activity_timeout: u64,
+    pub ui_directory: PathBuf,
     pub sd_collector_interface: String,  //kcf, "eth0" or "eth1" etc
 }
 
@@ -35,7 +35,7 @@ pub fn get_config() -> Config {
                 .short("i")
                 .long("portal-interface")
                 .value_name("interface")
-                .help("Portal interface")
+                .help("Wireless network interface to be used by WiFi Connect")
                 .takes_value(true),
         )
         .arg(
@@ -43,7 +43,10 @@ pub fn get_config() -> Config {
                 .short("s")
                 .long("portal-ssid")
                 .value_name("ssid")
-                .help("Portal SSID")
+                .help(&format!(
+                    "SSID of the captive portal WiFi network (default: {})",
+                    DEFAULT_SSID
+                ))
                 .takes_value(true),
         )
         .arg(
@@ -51,7 +54,7 @@ pub fn get_config() -> Config {
                 .short("p")
                 .long("portal-passphrase")
                 .value_name("passphrase")
-                .help("Portal passphrase")
+                .help("WPA2 Passphrase of the captive portal WiFi network (default: none)")
                 .takes_value(true),
         )
         .arg(
@@ -59,7 +62,10 @@ pub fn get_config() -> Config {
                 .short("g")
                 .long("portal-gateway")
                 .value_name("gateway")
-                .help("Portal gateway")
+                .help(&format!(
+                    "Gateway of the captive portal WiFi network (default: {})",
+                    DEFAULT_GATEWAY
+                ))
                 .takes_value(true),
         )
         .arg(
@@ -67,31 +73,29 @@ pub fn get_config() -> Config {
                 .short("d")
                 .long("portal-dhcp-range")
                 .value_name("dhcp_range")
-                .help("Portal DHCP range")
+                .help(&format!(
+                    "DHCP range of the WiFi network (default: {})",
+                    DEFAULT_DHCP_RANGE
+                ))
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("timeout")
-                .short("t")
-                .long("timeout")
-                .value_name("timeout")
-                .help("Connect timeout (milliseconds)")
+            Arg::with_name("activity-timeout")
+                .short("a")
+                .long("activity-timeout")
+                .value_name("activity_timeout")
+                .help("Exit if no activity for the specified time (seconds) (default: none)")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("clear")
-                .short("c")
-                .long("clear")
-                .value_name("true|false")
-                .help("Clear saved WiFi credentials (default: true)")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("ui-path")
+            Arg::with_name("ui-directory")
                 .short("u")
-                .long("ui-path")
-                .value_name("ui_path")
-                .help("Web UI location")
+                .long("ui-directory")
+                .value_name("ui_directory")
+                .help(&format!(
+                    "Web UI directory location (default: {})",
+                    DEFAULT_UI_DIRECTORY
+                ))
                 .takes_value(true),
         )
         .arg(
@@ -119,8 +123,6 @@ pub fn get_config() -> Config {
         |v| Some(v.to_string()),
     );
 
-    let clear = matches.value_of("clear").map_or(true, |v| !(v == "false"));
-
     let gateway = Ipv4Addr::from_str(&matches.value_of("portal-gateway").map_or_else(
         || env::var("PORTAL_GATEWAY").unwrap_or_else(|_| DEFAULT_GATEWAY.to_string()),
         String::from,
@@ -131,54 +133,51 @@ pub fn get_config() -> Config {
         String::from,
     );
 
+    let activity_timeout = u64::from_str(&matches.value_of("activity-timeout").map_or_else(
+        || env::var("ACTIVITY_TIMEOUT").unwrap_or_else(|_| DEFAULT_ACTIVITY_TIMEOUT.to_string()),
+        String::from,
+    )).expect("Cannot parse activity timeout");
+
     //kcf specific
     let sd_collector_interface = matches.value_of("sd-collector-interface").map_or_else(
         || env::var("SD_COLLECTOR_INTERFACE").unwrap_or_else(|_| DEFAULT_SD_COLLECTOR_INTERFACE.to_string()),
         String::from,
     );
-    println!("The collector interface: {}", &sd_collector_interface);
 
-    // TODO: network_manager receives the timeout in seconds, should be ms instead.
-    let timeout = u64::from_str(&matches.value_of("timeout").map_or_else(
-        || env::var("CONNECT_TIMEOUT").unwrap_or_else(|_| DEFAULT_TIMEOUT_MS.to_string()),
-        String::from,
-    )).expect("Cannot parse connect timeout") / 1000;
-
-    let ui_path = get_ui_path(matches.value_of("ui-path"));
+    let ui_directory = get_ui_directory(matches.value_of("ui-directory"));
 
     Config {
         interface: interface,
         ssid: ssid,
         passphrase: passphrase,
-        clear: clear,
         gateway: gateway,
         dhcp_range: dhcp_range,
-        timeout: timeout,
-        ui_path: ui_path,
+        activity_timeout: activity_timeout,
+        ui_directory: ui_directory,
         sd_collector_interface: sd_collector_interface,
     }
 }
 
-fn get_ui_path(cmd_ui_path: Option<&str>) -> PathBuf {
-    if let Some(ui_path) = cmd_ui_path {
-        return PathBuf::from(ui_path);
+fn get_ui_directory(cmd_ui_directory: Option<&str>) -> PathBuf {
+    if let Some(ui_directory) = cmd_ui_directory {
+        return PathBuf::from(ui_directory);
     }
 
-    if let Ok(ui_path) = env::var("UI_PATH") {
-        return PathBuf::from(ui_path);
+    if let Ok(ui_directory) = env::var("UI_DIRECTORY") {
+        return PathBuf::from(ui_directory);
     }
 
-    if let Some(install_ui_path) = get_install_ui_path() {
-        return install_ui_path;
+    if let Some(install_ui_directory) = get_install_ui_directory() {
+        return install_ui_directory;
     }
 
-    PathBuf::from(DEFAULT_UI_PATH)
+    PathBuf::from(DEFAULT_UI_DIRECTORY)
 }
 
 /// Checks whether `WiFi Connect` is running from install path and whether the
 /// UI directory is present in a corresponding location
 /// e.g. /usr/local/sbin/wifi-connect -> /usr/local/share/wifi-connect/ui
-fn get_install_ui_path() -> Option<PathBuf> {
+fn get_install_ui_directory() -> Option<PathBuf> {
     if let Ok(exe_path) = env::current_exe() {
         if let Ok(mut path) = exe_path.canonicalize() {
             path.pop();

@@ -1,20 +1,26 @@
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::{Receiver, Sender};
 use std::error::Error;
 use std::fmt;
 use std::net::Ipv4Addr;
+
+use serde_json;
 use path::PathBuf;
 use iron::prelude::*;
-use iron::{Iron, Request, Response, IronResult, status, typemap, IronError, Url, AfterMiddleware, headers};
+use iron::{headers, status, typemap, AfterMiddleware, Iron, IronError, IronResult, Request,
+           Response, Url};
 use iron::modifiers::Redirect;
 use router::Router;
 use staticfile::Static;
 use mount::Mount;
-use persistent::{Write};
-use params::{Params, FromValue};
+use persistent::Write;
+use params::{FromValue, Params};
+
+use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
+
+//kcf imports
 use rand::*;
 use std::str;
-use network::{NetworkCommand, NetworkCommandResponse};
 use kcf::*;
 use hbs::{Template, HandlebarsEngine, DirectorySource};
 
@@ -125,10 +131,12 @@ pub fn start_server(
     server_rx: Receiver<NetworkCommandResponse>,
     network_tx: Sender<NetworkCommand>,
     exit_tx: Sender<ExitResult>,
-    ui_path: &PathBuf,
+    ui_directory: &PathBuf,
     sd_collector_interface: String,
 ) {
     let exit_tx_clone = exit_tx.clone();
+
+     //TODO: Create a function, validate_cookie_key()
 
     let mut cfg = match load_diagnostics_config_file(CFG_FILE) {
         Ok(config) => config,
@@ -169,23 +177,22 @@ pub fn start_server(
     };
 
     let mut router = Router::new();
-    router.get("/", Static::new(ui_path), "index");
+    router.get("/", Static::new(ui_directory), "index");
     router.get("/ssid", ssid, "ssid");
     router.post("/connect", connect, "connect");
 
     // kcf routes
     router.get(ROUTE_GET_CONFIG, get_config, "getconfig");
     router.get(ROUTE_SHOW_STATUS, get_status, "showstatus");
-
     router.post(ROUTE_AUTH, do_auth, "auth");
     router.post(ROUTE_SET_CONFIG, set_config, "setconfig");
     // end kcf routes
 
     let mut assets = Mount::new();
     assets.mount("/", router);
-    assets.mount("/css", Static::new(&ui_path.join("css")));
-    assets.mount("/img", Static::new(&ui_path.join("img")));
-    assets.mount("/js", Static::new(&ui_path.join("js")));
+    assets.mount("/css", Static::new(&ui_directory.join("css")));
+    assets.mount("/img", Static::new(&ui_directory.join("img")));
+    assets.mount("/js", Static::new(&ui_directory.join("js")));
 
     // handlebar style templates
     let mut hbse = HandlebarsEngine::new();
@@ -210,58 +217,45 @@ pub fn start_server(
     }
 }
 
-#[cfg(feature = "no_hotspot")]
 fn ssid(req: &mut Request) -> IronResult<Response> {
-    println!("NO Hotspot running in localbuild.  So no settings will be shown.");
+    info!("ssid(): User connected to the captive portal");
 
-    let cfg = match load_diagnostics_config_file(CFG_FILE) {
-        Ok(config) => config,
-        Err(config) => {
-            println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
-            panic!("{:?}", config);
-        }
-    };
-
-    let mut resp = Response::new();
-    resp.set_mut(Template::new(WIFI_TEMPLATE_NAME, cfg)).set_mut(status::Ok);
-    Ok(resp)
-}
-
-#[cfg(not(feature = "no_hotspot"))]
-fn ssid(req: &mut Request) -> IronResult<Response> {
-    // used to retrieve ssid's from network manager 
     let request_state = get_request_state!(req);
 
     if let Err(err) = request_state.network_tx.send(NetworkCommand::Activate) {
         exit_with_error!(
             request_state,
-            format!("Sending NetworkCommand::Activate failed: {}", err.description())
+            format!(
+                "Sending NetworkCommand::Activate failed: {}",
+                err.description()
+            )
         );
     }
 
     let access_points_ssids = match request_state.server_rx.recv() {
-        Ok(result) => {
-            match result {
-                NetworkCommandResponse::AccessPointsSsids(ssids) => ssids,
-            }
+        Ok(result) => match result {
+            NetworkCommandResponse::AccessPointsSsids(ssids) => ssids,
         },
-        Err(err) => {
-            exit_with_error!(
-                request_state,
-                format!("Receiving access points ssids failed: {}", err.description())
+        Err(err) => exit_with_error!(
+            request_state,
+            format!(
+                "Receiving access points ssids failed: {}",
+                err.description()
             )
-        },
+        ),
     };
 
     let access_points_json = match serde_json::to_string(&access_points_ssids) {
         Ok(json) => json,
-        Err(err) => {
-            exit_with_error!(
-                request_state,
-                format!("Receiving access points ssids failed: {}", err.description())
+        Err(err) => exit_with_error!(
+            request_state,
+            format!(
+                "Serializing access points ssids failed: {}",
+                err.description()
             )
-        },
+        ),
     };
+
     Ok(Response::with((status::Ok, access_points_json)))
 }
 
@@ -285,7 +279,10 @@ fn connect(req: &mut Request) -> IronResult<Response> {
     if let Err(err) = request_state.network_tx.send(command) {
         exit_with_error!(
             request_state,
-            format!("Sending NetworkCommand::Connect failed: {}", err.description())
+            format!(
+                "Sending NetworkCommand::Connect failed: {}",
+                err.description()
+            )
         );
     }
 

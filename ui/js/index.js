@@ -1,4 +1,5 @@
 $(function(){
+	/*
 	$.get("/ssid", function(data){
 		if(data.length === 0){
 			$('.before-submit').hide();
@@ -8,7 +9,7 @@ $(function(){
 				$("#ssid-select").append($('<option>').attr('val', val).text(val));
 			});
 		}
-	});
+	});*/
 	$('#connect-form').submit(function(ev){
 		$.post('/connect', $('#connect-form').serialize(), function(data){
 			$('.before-submit').hide();

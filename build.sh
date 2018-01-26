@@ -38,7 +38,7 @@ elif [ "${LOCAL_DOCKER}" == "1" ]; then
     docker build --rm -t wifitest .
 else
     #run a debug build, default
-    cargo build --features="localbuild"
+    cargo build --features="no_hotspot"
     cp target/debug/wifi-connect .
     # if you need to set by ip address instead.
     #./wifi-connect --portal-gateway=192.168.1.169 --sd-collector-interface=wlp2s0
