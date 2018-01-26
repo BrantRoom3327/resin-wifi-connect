@@ -29,6 +29,7 @@ done
 
 #echo PRODUCTION = "${PRODUCTION}"
 #echo LOCAL_DOCKER = "${LOCAL_DOCKER}"
+#echo USE_HOTSPOT = "${USE_HOTSPOT}"
 
 if [ "${PRODUCTION}" == "1" ]; then
     #build the release for docker push.  
@@ -36,8 +37,8 @@ if [ "${PRODUCTION}" == "1" ]; then
     scripts/local-build.sh armv7-unknown-linux-gnueabihf
     docker build --rm -t wifitest .
 elif [ "${LOCAL_DOCKER}" == "1" ]; then 
-    # use the local Dockerfile to build an image
-    cargo build --features="localbuild"
+    # use the local Dockerfile to build an image, and leave hotspot enabled.
+    cargo build
     cp target/debug/wifi-connect .
     docker build --rm -t wifitest .
 elif [ "${USE_HOTSPOT}" == "1" ]; then 
@@ -45,8 +46,9 @@ elif [ "${USE_HOTSPOT}" == "1" ]; then
     cp target/debug/wifi-connect .
     ./wifi-connect --portal-interface=wlp2s0 --sd-collector-interface=wlp2s0
 else
+    #this is the default with no options.  It only runs the http server and tries to operate without a hotspot but allow for 
+    #setting system params.  You will likely need to sudo the wifi-connect command below to actually set system params (ethernet settings).
     cargo build --features="no_hotspot"
     cp target/debug/wifi-connect .
-    # if you need to set by ip address instead.
-    ./wifi-connect --portal-gateway=192.168.1.169 --sd-collector-interface=docker0
+    ./wifi-connect --portal-gateway=192.168.1.169 --sd-collector-interface=en0
 fi
