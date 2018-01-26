@@ -27,7 +27,7 @@ use linux::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
 use macos::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
 
 // this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are stripped for runtime
-pub const SERVER_PORT: i32 = 8080;
+pub const NO_HOTSPOT_SERVER_PORT: i32 = 8080;
 pub const HTTP_PUBLIC: &str = "./ui"; //FIXME: Follow the config param
 pub const CONFIG_TEMPLATE_NAME: &str = "config";
 pub const STATUS_TEMPLATE_NAME: &str = "status";
@@ -308,7 +308,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
                     return Err(IronError::new(e, status::InternalServerError))
                 }
             };
-        } 
+        }
         ethernet_dns_entries.dedup();
 
         match set_ip_and_netmask(&options.ethernet_ip_address, &options.ethernet_subnet_mask, &sd_collector_interface) {
@@ -341,7 +341,14 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         update_sd_collector_xml(&cfg);
 
     } else {
-        // TODO: enable DHCP on the ethernet interface.
+        /*
+        let dhcp_on = match enable_system_dhcp(sd_collector_interface) {
+            Ok(dhcp) => dhcp,
+            Err(e) => {
+                println!("Failed to enable dhcp on system.  May result in incorret network settings.");
+                return Ok(Response::with((status::InternalServerError, "Failed enable dhcp on system.")))
+            }
+        };*/
     }
     
     let status = match write_diagnostics_config(&cfg) {
@@ -654,3 +661,8 @@ pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
         return None;
     }
 } 
+
+fn enable_system_dhcp(sd_collector_interface: &str) -> IronResult<String> {
+    println!("Todo, enable dhcp on the system!");
+    Ok("FIXME".to_string())
+}

@@ -15,6 +15,10 @@ case $key in
     LOCAL_DOCKER=1
     shift # past arg 
     ;;
+    -h|--hotspot)
+    USE_HOTSPOT=1
+    shift # past arg 
+    ;;
     #build for arm v7, push to resin and run f
     -p|--production)
     PRODUCTION=1
@@ -36,11 +40,13 @@ elif [ "${LOCAL_DOCKER}" == "1" ]; then
     cargo build --features="localbuild"
     cp target/debug/wifi-connect .
     docker build --rm -t wifitest .
+elif [ "${USE_HOTSPOT}" == "1" ]; then 
+    cargo build
+    cp target/debug/wifi-connect .
+    ./wifi-connect --portal-interface=wlp2s0 --sd-collector-interface=wlp2s0
 else
-    #run a debug build, default
     cargo build --features="no_hotspot"
     cp target/debug/wifi-connect .
     # if you need to set by ip address instead.
-    #./wifi-connect --portal-gateway=192.168.1.169 --sd-collector-interface=wlp2s0
     ./wifi-connect --portal-gateway=192.168.1.148 --sd-collector-interface=en0
 fi

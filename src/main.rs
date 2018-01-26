@@ -1,29 +1,26 @@
 #![cfg_attr(feature = "clippy", feature(plugin))]
 #![cfg_attr(feature = "clippy", plugin(clippy))]
 
-#[macro_use]
-extern crate log;
-extern crate env_logger;
 extern crate clap;
-extern crate network_manager;
-
+extern crate env_logger;
 extern crate iron;
+#[macro_use] extern crate log;
+extern crate network_manager;
+extern crate params;
+extern crate persistent;
 extern crate router;
 extern crate staticfile;
-extern crate mount;
 extern crate serde_json;
-extern crate persistent;
-extern crate params;
 extern crate handlebars;
 extern crate handlebars_iron as hbs;
 extern crate cookie;
 extern crate time;
 extern crate rand;
 extern crate regex;
+extern crate mount;
 #[macro_use] extern crate lazy_static;
-
-#[macro_use]
-extern crate serde_derive;
+#[macro_use] extern crate cfg_if;
+#[macro_use] extern crate serde_derive;
 
 mod config;
 mod network;
@@ -54,8 +51,6 @@ pub fn exit(exit_tx: &Sender<ExitResult>, error: String) {
 
 fn main() {
     logger::init();
-
-    println!("<<Running local debug build>>\n");
 
     let config = get_config();
 

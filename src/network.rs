@@ -109,7 +109,7 @@ impl NetworkCommandHandler {
         config: &Config,
         exit_tx: &Sender<ExitResult>,
         server_rx: Receiver<NetworkCommandResponse>,
-        network_tx: Sender<NetworkCommand>
+        network_tx: Sender<NetworkCommand>,
     ) {
         let gateway = config.gateway;
         let exit_tx_server = exit_tx.clone();
@@ -217,7 +217,10 @@ impl NetworkCommandHandler {
 
         let access_points_ssids = get_access_points_ssids_owned(&self.access_points);
 
-        if let Err(e) = self.server_tx.send(NetworkCommandResponse::AccessPointsSsids(access_points_ssids,)) {
+        if let Err(e) = self.server_tx
+            .send(NetworkCommandResponse::AccessPointsSsids(
+                access_points_ssids,
+            )) {
             return Err(format!(
                 "Sending access point ssids results failed: {}",
                 e.description()

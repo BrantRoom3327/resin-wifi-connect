@@ -167,14 +167,20 @@ pub fn start_server(
         Err(err) => panic!("{:?}", err)
     };
 
-    let request_state = RequestSharedState {
+    let mut request_state = RequestSharedState {
         gateway: gateway,
         server_rx: server_rx,
         network_tx: network_tx,
         exit_tx: exit_tx,
         sd_collector_interface: sd_collector_interface,
-        http_server_address: gateway.to_string() + ":" + &SERVER_PORT.to_string(),
+        http_server_address: gateway.to_string() + ":",
     };
+
+    if cfg!(feature = "no_hotspot") {
+        request_state.http_server_address += &NO_HOTSPOT_SERVER_PORT.to_string()
+    } else {
+        request_state.http_server_address += "80"
+    }
 
     let mut router = Router::new();
     router.get("/", Static::new(ui_directory), "index");
@@ -218,7 +224,7 @@ pub fn start_server(
 }
 
 fn ssid(req: &mut Request) -> IronResult<Response> {
-    info!("ssid(): User connected to the captive portal");
+    info!("User connected to the captive portal");
 
     let request_state = get_request_state!(req);
 
@@ -289,6 +295,9 @@ fn connect(req: &mut Request) -> IronResult<Response> {
     Ok(Response::with(status::Ok))
 }
 
+//
+// KCF section
+//
 pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOptionsFromPost> {
     let params = get_request_ref!(req, Params, "Getting request params failed");
 
