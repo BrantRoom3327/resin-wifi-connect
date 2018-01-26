@@ -17,6 +17,7 @@ use std::fmt;
 use iron::Set;
 use hbs::Template;
 use server::RequestSharedState;
+use std::io::ErrorKind::InvalidData;
 use server::{collect_set_config_options, collect_do_auth_options, get_sd_collector_ethernet_interface, get_http_server_address};
 
 #[cfg(target_os = "linux")]
@@ -344,15 +345,13 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         // TODO: enable DHCP on the ethernet interface.
     }
     
-
-/*
     let status = match write_diagnostics_config(&cfg) {
         Ok(s) => s,
         Err(err) => { 
             return Err(IronError::new(err, status::InternalServerError));
         },
     };
-*/
+
     let http_server_address = get_http_server_address(req).expect("Couldn't get request state at runtime");
     let show_status_route = "http://".to_string() + &http_server_address + ROUTE_SHOW_STATUS;
 
@@ -637,15 +636,15 @@ pub fn load_file_as_string(file_path: &str) -> io::Result<String> {
     Ok(data)
 }
 
-/*
-pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), Error> {
-    /*
+pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), io::Error> {
     let mut f = OpenOptions::new().write(true).truncate(true).open(CFG_FILE)?;
-    let data = serde_json::to_string(&config)?;
+    let data = match serde_json::to_string(&config) {
+        Ok(computer) => computer,
+        Err(e) => return Err(io::Error::new(InvalidData, e)),
+    };
     let bytes_out = f.write(data.as_bytes())?;
-    */
     Ok(())
-}*/
+}
 
 pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
     let haystack_len = haystack.len(); 

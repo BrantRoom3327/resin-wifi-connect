@@ -154,12 +154,10 @@ pub fn start_server(
         cfg.cookie_key = new_key;
     }
 
-/*
     let status = match write_diagnostics_config(&cfg) {
         Ok(s) => s,
         Err(err) => panic!("{:?}", err)
     };
-    */
 
     let request_state = RequestSharedState {
         gateway: gateway,
