@@ -172,7 +172,6 @@ pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool
     }
 
     let (name, value) = cookie.name_value();
-    //println!("Validate -> name {} cookie value {}", name, value);
 
     let auth = if COOKIE_NAME == name && COOKIE_VALUE == value {
         true
@@ -184,22 +183,21 @@ pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool
 }
 
 // instead of wiping the line, wipe the data between begin and end tags and insert new.
-// FIXME: Add some more error checking
-pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) {
+pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::Error> {
 
     let mut xml_data = match load_file_as_string(&cfg.collector_cfg_file) {
         Ok(xml) => xml,
-        Err(e) => return,
+        Err(e) => return Err(io::Error::new(InvalidData, format!("Could not load -> {}", cfg.collector_cfg_file))),
     };
 
     let prometheus_start = match find_offset_in_string(&xml_data, PROMETHEUS_TAG_START) {
         Some(start) => start + PROMETHEUS_TAG_START.to_string().len(),
-        None => return,
+        None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROMETHEUS_TAG_START.to_string(), cfg.collector_cfg_file))),
     };
 
     let prometheus_end = match find_offset_in_string(&xml_data, PROMETHEUS_TAG_END) {
         Some(end) => end,
-        None => return,
+        None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROMETHEUS_TAG_END.to_string(), cfg.collector_cfg_file))),
     };
 
     let drained_of_prometheus: String = xml_data.drain(prometheus_start..prometheus_end).collect();
@@ -209,12 +207,13 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) {
 
     let proxy_settings_start = match find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_START) {
         Some(start) => start + PROXYSETTINGS_TAG_START.to_string().len(),
-        None => return,
+        None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROXYSETTINGS_TAG_START.to_string(), cfg.collector_cfg_file))),
+        //None => return,
     };
 
     let proxy_settings_end = match find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_END) {
         Some(end) => end,
-        None => return,
+        None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROXYSETTINGS_TAG_END.to_string(), cfg.collector_cfg_file))),
     };
 
     let drained_of_settings: String = xml_data.drain(proxy_settings_start..proxy_settings_end).collect();
@@ -236,7 +235,12 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) {
 
     xml_data.insert_str(proxy_settings_start, &collector_string);
 
-    write_file_contents(&xml_data, &cfg.collector_cfg_file);
+    let file_ok = match write_file_contents(&xml_data, &cfg.collector_cfg_file) {
+        Ok(yay) => yay,
+        Err(e) => return Err(io::Error::new(InvalidData, format!("Failed to write to {} err {:?}", cfg.collector_cfg_file, e))),
+    };
+
+    Ok(())
 }
 
 // 
@@ -711,7 +715,10 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
 
     let wrote_file = match write_file_contents(&output_config_data, file_path) {
         Ok(wrote) => wrote,
-        Err(e) => return Err(e),
+        Err(e) => {
+            println!("Failed to write network configuration file {} err -> {:?}\n", file_path, e);
+            return Err(e);
+        }
     };
 
     Ok(())
