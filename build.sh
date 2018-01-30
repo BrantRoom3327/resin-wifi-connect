@@ -44,11 +44,11 @@ elif [ "${LOCAL_DOCKER}" == "1" ]; then
 elif [ "${USE_HOTSPOT}" == "1" ]; then 
     cargo build
     cp target/debug/wifi-connect .
-    ./wifi-connect --portal-interface=wlp2s0 --sd-collector-interface=wlp2s0
+    ./wifi-connect --portal-interface=wlp2s0 --collector-wifi=wlp2s0 --collector-ethernet=eth0
 else
     #this is the default with no options.  It only runs the http server and tries to operate without a hotspot but allow for 
     #setting system params.  You will likely need to sudo the wifi-connect command below to actually set system params (ethernet settings).
     cargo build --features="no_hotspot"
     cp target/debug/wifi-connect .
-    ./wifi-connect --portal-gateway=192.168.1.148 --sd-collector-interface=en0
+    ./wifi-connect --portal-gateway=192.168.1.148 --collector-ethernet=en0 --collector-wifi=wlan0
 fi

@@ -16,7 +16,7 @@ use std::fmt;
 use iron::Set;
 use hbs::Template;
 use std::io::ErrorKind::InvalidData;
-use server::{collect_set_config_options, collect_do_auth_options, get_sd_collector_ethernet_interface, get_http_server_address};
+use server::{collect_set_config_options, collect_do_auth_options, get_kcf_runtime_data};
 
 #[cfg(target_os = "linux")]
 use linux::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
@@ -29,18 +29,20 @@ pub const NO_HOTSPOT_SERVER_PORT: i32 = 8080;
 pub const HTTP_PUBLIC: &str = "./ui"; //FIXME: Follow the config param
 pub const CONFIG_TEMPLATE_NAME: &str = "config";
 pub const STATUS_TEMPLATE_NAME: &str = "status";
-pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
+//pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
 
-//required config and auth files for the server to validate connections and store persistent data.
+//Files we read or write
 pub const AUTH_FILE: &str = "auth.json";
 pub const CFG_FILE: &str = "cfg.json";
-
-// just using a temp file for now before live settings.
-pub const NETWORK_INTERFACES_CFG: &str = "etc_network_interfaces";
-
-//sd collector info/settings
-pub const DEFAULT_SD_COLLECTOR_INTERFACE: &str = "eth0";
+pub const NETWORK_INTERFACES_CFG_FILE: &str = "etc_network_interfaces";
 pub const SD_COLLECTOR_XML_FILE: &str = "collectorsettings.xml";
+
+//interface settings
+pub const DEFAULT_COLLECTOR_ETHERNET_INTERFACE: &str = "eth0";
+pub const DEFAULT_COLLECTOR_WIFI_INTERFACE: &str = "wlan0";
+pub const DEFAULT_HOTSPOT_INTERFACE: &str = "wlan0";
+
+// parsing of sd collector xml tags.
 pub const PROMETHEUS_TAG_START: &str = "<PrometheusUrl>";
 pub const PROMETHEUS_TAG_END: &str = "</PrometheusUrl>";
 pub const PROXYSETTINGS_TAG_START: &str = "<ProxySettings>";
@@ -127,6 +129,13 @@ pub struct sd_collector_proxy_settings {
 pub struct Auth{
     pub username: String,
     pub password: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct KCFRuntimeData {
+    pub http_server_address: String,
+    pub collector_ethernet: String, 
+    pub collector_wifi: String, 
 }
 
 impl fmt::Display for SmartDiagnosticsConfig {
@@ -250,7 +259,6 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
     
-    let sd_collector_interface = get_sd_collector_ethernet_interface(req).expect("Couldn't get request state at runtime!");
 
     let mut validated_ethernet_settings = match validate_network_settings(
             options.ethernet_dhcp_enabled, &options.ethernet_ip_address, 
@@ -261,7 +269,8 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     };
 
     // set the interface name in for the collector
-    validated_ethernet_settings.adapter_name = sd_collector_interface;
+    let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
+    validated_ethernet_settings.adapter_name = kcf.collector_ethernet;
 
     // wifi
     // TODO are these always correct in the ethernet enabled case.
@@ -275,7 +284,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     };
 
     // setup ethernet adapter with new settings in config file.
-    let network_configured = match configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, NETWORK_INTERFACES_CFG) {
+    let network_configured = match configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, NETWORK_INTERFACES_CFG_FILE) {
         Ok(settings) => settings,
         Err(e) => {
             println!("Unable to set network configuration");
@@ -328,8 +337,8 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         },
     };
 
-    let http_server_address = get_http_server_address(req).expect("Couldn't get request state at runtime");
-    let show_status_route = "http://".to_string() + &http_server_address + ROUTE_SHOW_STATUS;
+    //let http_server_address = get_http_server_address(req).expect("Couldn't get request state at runtime");
+    let show_status_route = "http://".to_string() + &kcf.http_server_address + ROUTE_SHOW_STATUS;
 
     // redirect back to login page on success
     let url = Url::parse(&show_status_route).unwrap();
@@ -373,8 +382,8 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
         }
     }
 
-    let sd_collector_interface = get_sd_collector_ethernet_interface(req).expect("Couldn't get request state at runtime!");
-    let net_settings = match get_network_settings(&sd_collector_interface) {
+    let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
+    let net_settings = match get_network_settings(&kcf.collector_ethernet) {
         Some(settings) => settings,
         None => {
             println!("No network settings returned");
@@ -429,8 +438,8 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
         }
     };
 
-    let http_server_address = get_http_server_address(req).expect("Couldn't get request state at runtime");
-    let get_config_route = "http://".to_string() + &http_server_address + ROUTE_GET_CONFIG;
+    let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
+    let get_config_route = "http://".to_string() + &kcf.http_server_address + ROUTE_GET_CONFIG;
 
     let url = Url::parse(&get_config_route).unwrap();
 

@@ -22,7 +22,11 @@ pub struct Config {
     pub dhcp_range: String,
     pub activity_timeout: u64,
     pub ui_directory: PathBuf,
-    pub sd_collector_interface: String,  //kcf, "eth0" or "eth1" etc
+
+    //kcf section
+    pub collector_ethernet: String,  //kcf, "eth0" or "eth1" etc
+    pub collector_wifi: String,  //kcf, "wlan0" or "wlan1" etc
+    pub hotspot_interface: String, // interface to run the wlan hotspot on.
 }
 
 pub fn get_config() -> Config {
@@ -99,11 +103,27 @@ pub fn get_config() -> Config {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("sd-collector-interface")
+            Arg::with_name("collector-ethernet")
                 .short("e")
-                .long("sd-collector-interface")
-                .value_name("sd_collector_interface")
+                .long("collector-ethernet")
+                .value_name("collector_ethernet")
                 .help("Ethernet device (e.g eth0) for collector")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("collector-wifi")
+                .short("w")
+                .long("collector-wifi")
+                .value_name("collector_wifi")
+                .help("Wifi device (e.g wlan0) for collector")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("hotspot-interface")
+                .short("hs")
+                .long("hotspot-interface")
+                .value_name("hotspot_interface")
+                .help("Wifi device used to run the hotspot (e.g wlan1)")
                 .takes_value(true),
         )
         .get_matches();
@@ -139,22 +159,34 @@ pub fn get_config() -> Config {
     )).expect("Cannot parse activity timeout");
 
     //kcf specific
-    let sd_collector_interface = matches.value_of("sd-collector-interface").map_or_else(
-        || env::var("SD_COLLECTOR_INTERFACE").unwrap_or_else(|_| DEFAULT_SD_COLLECTOR_INTERFACE.to_string()),
+    let collector_ethernet = matches.value_of("collector-ethernet").map_or_else(
+        || env::var("COLLECTOR_ETHERNET").unwrap_or_else(|_| DEFAULT_COLLECTOR_ETHERNET_INTERFACE.to_string()),
+        String::from,
+    );
+
+    let collector_wifi = matches.value_of("collector-wifi").map_or_else(
+        || env::var("COLLECTOR_WIFI").unwrap_or_else(|_| DEFAULT_COLLECTOR_WIFI_INTERFACE.to_string()),
+        String::from,
+    );
+
+    let hotspot_interface = matches.value_of("hotspot-interface").map_or_else(
+        || env::var("HOTSPOT_INTERFACE").unwrap_or_else(|_| DEFAULT_HOTSPOT_INTERFACE.to_string()),
         String::from,
     );
 
     let ui_directory = get_ui_directory(matches.value_of("ui-directory"));
 
     Config {
-        interface: interface,
-        ssid: ssid,
-        passphrase: passphrase,
-        gateway: gateway,
-        dhcp_range: dhcp_range,
-        activity_timeout: activity_timeout,
-        ui_directory: ui_directory,
-        sd_collector_interface: sd_collector_interface,
+        interface,
+        ssid,
+        passphrase,
+        gateway,
+        dhcp_range,
+        activity_timeout,
+        ui_directory,
+        collector_ethernet,
+        collector_wifi,
+        hotspot_interface,
     }
 }
 

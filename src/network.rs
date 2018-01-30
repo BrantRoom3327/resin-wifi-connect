@@ -109,7 +109,8 @@ impl NetworkCommandHandler {
         let gateway = config.gateway;
         let exit_tx_server = exit_tx.clone();
         let ui_directory = config.ui_directory.clone();
-        let sd_collector_interface = config.sd_collector_interface.clone();
+        let collector_ethernet = config.collector_ethernet.clone();
+        let collector_wifi = config.collector_wifi.clone();
 
         thread::spawn(move || {
             start_server(
@@ -118,7 +119,8 @@ impl NetworkCommandHandler {
                 network_tx,
                 exit_tx_server,
                 &ui_directory,
-                sd_collector_interface,
+                collector_ethernet,
+                collector_wifi,
             );
         });
     }

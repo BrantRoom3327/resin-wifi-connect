@@ -23,6 +23,7 @@ use rand::*;
 use std::str;
 use kcf::*;
 use hbs::{HandlebarsEngine, DirectorySource};
+use std::io;
 
 #[derive(Debug)]
 pub struct RequestSharedState {
@@ -30,8 +31,8 @@ pub struct RequestSharedState {
     server_rx: Receiver<NetworkCommandResponse>,
     network_tx: Sender<NetworkCommand>,
     exit_tx: Sender<ExitResult>,
-    sd_collector_interface: String,  //KCF specific
-    http_server_address: String, //KCF specific
+    //kcf specific
+    kcf: KCFRuntimeData,
 }
 
 impl typemap::Key for RequestSharedState {
@@ -132,7 +133,8 @@ pub fn start_server(
     network_tx: Sender<NetworkCommand>,
     exit_tx: Sender<ExitResult>,
     ui_directory: &PathBuf,
-    sd_collector_interface: String,
+    collector_ethernet: String,
+    collector_wifi: String,
 ) {
     let exit_tx_clone = exit_tx.clone();
 
@@ -167,19 +169,24 @@ pub fn start_server(
         Err(err) => panic!("{:?}", err)
     };
 
-    let mut request_state = RequestSharedState {
-        gateway: gateway,
-        server_rx: server_rx,
-        network_tx: network_tx,
-        exit_tx: exit_tx,
-        sd_collector_interface: sd_collector_interface,
+    let kcf = KCFRuntimeData {
+        collector_ethernet,
+        collector_wifi,
         http_server_address: gateway.to_string() + ":",
     };
 
+    let mut request_state = RequestSharedState {
+        gateway,
+        server_rx,
+        network_tx,
+        exit_tx,
+        kcf, //kcf specific
+    };
+
     if cfg!(feature = "no_hotspot") {
-        request_state.http_server_address += &NO_HOTSPOT_SERVER_PORT.to_string()
+        request_state.kcf.http_server_address += &NO_HOTSPOT_SERVER_PORT.to_string()
     } else {
-        request_state.http_server_address += "80"
+        request_state.kcf.http_server_address += "80"
     }
 
     let mut router = Router::new();
@@ -207,7 +214,7 @@ pub fn start_server(
         panic!("{}", r);
     }
 
-    let server_address_clone = request_state.http_server_address.clone();
+    let server_address_clone = request_state.kcf.http_server_address.clone();
     info!("Starting HTTP server on http://{}", server_address_clone);
 
     let mut chain = Chain::new(assets);
@@ -328,12 +335,7 @@ pub fn collect_do_auth_options(req: &mut Request) -> IronResult<Auth> {
     Ok(Auth {username, password})
 }
 
-pub fn get_sd_collector_ethernet_interface(req: &mut Request) -> IronResult<String> {
+pub fn get_kcf_runtime_data(req: &mut Request) -> Result<KCFRuntimeData, IronError> {
     let state = get_request_state!(req);
-    Ok(state.sd_collector_interface.clone())
-}
-
-pub fn get_http_server_address(req: &mut Request) -> IronResult<String> {
-    let state = get_request_state!(req);
-    Ok(state.http_server_address.clone())
+    Ok(state.kcf.clone())
 }
