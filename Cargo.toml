@@ -38,6 +38,7 @@ features = ["secure", "percent-encode"]
 
 [features]
 no_hotspot = []
+etc_network_interfaces = []
 watch = ["handlebars-iron/watch"]
 
 

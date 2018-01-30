@@ -50,5 +50,5 @@ else
     #setting system params.  You will likely need to sudo the wifi-connect command below to actually set system params (ethernet settings).
     cargo build --features="no_hotspot"
     cp target/debug/wifi-connect .
-    ./wifi-connect --portal-gateway=192.168.1.169 --sd-collector-interface=en0
+    ./wifi-connect --portal-gateway=192.168.1.148 --sd-collector-interface=en0
 fi

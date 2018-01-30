@@ -3,7 +3,6 @@ use std::net::Ipv4Addr;
 use regex::Regex;
 use ExitResult;
 use std::str::FromStr;
-use std::error::Error;
 use iron::modifiers::Redirect;
 use std::sync::mpsc::Sender;
 use cookie::{CookieJar, Cookie, Key, SameSite};
@@ -14,9 +13,9 @@ use std::io;
 use serde_json;
 use std::fs::File;
 use std::fmt;
+use std::fmt::Error;
 use iron::Set;
 use hbs::Template;
-use server::RequestSharedState;
 use std::io::ErrorKind::InvalidData;
 use server::{collect_set_config_options, collect_do_auth_options, get_sd_collector_ethernet_interface, get_http_server_address};
 
@@ -36,6 +35,9 @@ pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
 //required config and auth files for the server to validate connections and store persistent data.
 pub const AUTH_FILE: &str = "auth.json";
 pub const CFG_FILE: &str = "cfg.json";
+
+// just using a temp file for now before live settings.
+pub const NETWORK_INTERFACES_CFG: &str = "etc_network_interfaces";
 
 //sd collector info/settings
 pub const DEFAULT_SD_COLLECTOR_INTERFACE: &str = "eth0";
@@ -60,9 +62,10 @@ pub const COOKIE_EXPIRES_HOURS: i32 = 1;
 //
 // KCF Only Routes and functions, kept out of mainline files to avoid conflicts.
 //
-
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct NetworkSettings {
+    pub adapter_name: String,
+    pub dhcp_enabled: bool,
     pub ip_address: Ipv4Addr,
     pub netmask: Ipv4Addr,
     pub gateway: Ipv4Addr, 
@@ -75,7 +78,7 @@ pub struct SmartDiagnosticsConfig {
     pub cloud_storage_enabled: bool,
     pub data_destination_url: String,
 
-    // sd collector ip address settings.
+    //replace with a NetworkSettings?
     pub ethernet_dhcp_enabled: bool,
     pub ethernet_ip_address: String,
     pub ethernet_subnet_mask: String,
@@ -109,6 +112,8 @@ pub struct SetConfigOptionsFromPost {
     pub proxy_gateway_port: u16,
 }
 
+
+#[allow(non_snake_case)]
 #[derive(Serialize)]
 pub struct sd_collector_proxy_settings {
     pub Enabled: bool,
@@ -160,7 +165,7 @@ pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool
     }
 
     let (name, value) = cookie.name_value();
-    println!("Validate -> name {} cookie value {}", name, value);
+    //println!("Validate -> name {} cookie value {}", name, value);
 
     let auth = if COOKIE_NAME == name && COOKIE_VALUE == value {
         true
@@ -172,50 +177,40 @@ pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool
 }
 
 // instead of wiping the line, wipe the data between begin and end tags and insert new.
-pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) {
+// FIXME: Add some more error checking
+pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig, file_path: &str) {
 
-    let mut xml_file = match load_file_as_string(SD_COLLECTOR_XML_FILE) {
+    let mut xml_data = match load_file_as_string(file_path) {
         Ok(xml) => xml,
-        Err(e) => {
-            return;
-        }
+        Err(e) => return,
     };
-    //println!("XML at start\n{}", xml_file);
 
-    let prometheus_start = match find_offset_in_string(&xml_file, PROMETHEUS_TAG_START) {
+    let prometheus_start = match find_offset_in_string(&xml_data, PROMETHEUS_TAG_START) {
         Some(start) => start + PROMETHEUS_TAG_START.to_string().len(),
-        None => { 
-            return;
-        }
+        None => return,
     };
 
-    let prometheus_end = match find_offset_in_string(&xml_file, PROMETHEUS_TAG_END) {
+    let prometheus_end = match find_offset_in_string(&xml_data, PROMETHEUS_TAG_END) {
         Some(end) => end,
-        None => { 
-            return;
-        }
+        None => return,
     };
 
-    let drained_of_prometheus: String = xml_file.drain(prometheus_start..prometheus_end).collect();
+    let drained_of_prometheus: String = xml_data.drain(prometheus_start..prometheus_end).collect();
     
     //now inject the data after the start tag.
-    xml_file.insert_str(prometheus_start, &cfg.data_destination_url);
+    xml_data.insert_str(prometheus_start, &cfg.data_destination_url);
 
-    let proxy_settings_start = match find_offset_in_string(&xml_file, PROXYSETTINGS_TAG_START) {
+    let proxy_settings_start = match find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_START) {
         Some(start) => start + PROXYSETTINGS_TAG_START.to_string().len(),
-        None => { 
-            return;
-        }
+        None => return,
     };
 
-    let proxy_settings_end = match find_offset_in_string(&xml_file, PROXYSETTINGS_TAG_END) {
+    let proxy_settings_end = match find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_END) {
         Some(end) => end,
-        None => {
-            return;
-        }
+        None => return,
     };
 
-    let drained_of_settings: String = xml_file.drain(proxy_settings_start..proxy_settings_end).collect();
+    let drained_of_settings: String = xml_data.drain(proxy_settings_start..proxy_settings_end).collect();
 
     // now inject the data, starting at the end of the start tag
     let mut collector_settings = sd_collector_proxy_settings {
@@ -229,15 +224,13 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) {
     
     let collector_string = match serde_json::to_string(&collector_settings) {
         Ok(json) => json,
-        Err(err) => {
-            panic!("Serialization didn't happen for collector settings!")
-        },
+        Err(err) => panic!("Serialization didn't happen for collector settings!"),
     };
 
-    xml_file.insert_str(proxy_settings_start, &collector_string);
-    //println!("xml at end\n{}", xml_file);
+    xml_data.insert_str(proxy_settings_start, &collector_string);
+    //println!("xml at end\n{}", xml_data);
 
-    println!("Fixme write the file out");
+    write_file_contents(&xml_data, file_path);
 }
 
 // 
@@ -247,9 +240,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
 
     let options = match collect_set_config_options(req) {
         Ok(opt) => opt,
-        Err(e) => {
-            return Err(e);
-        }
+        Err(e) => return Err(e),
     };
 
     //
@@ -257,14 +248,45 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     //
     let mut cfg = match load_diagnostics_config_file(CFG_FILE) {
         Ok(cfg) => cfg,
-        Err(err) => {
-            return Err(IronError::new(err, status::InternalServerError));
+        Err(err) => return Err(IronError::new(err, status::InternalServerError)),
+    };
+    
+    let sd_collector_interface = get_sd_collector_ethernet_interface(req).expect("Couldn't get request state at runtime!");
+
+    let mut validated_ethernet_settings = match validate_network_settings(
+            options.ethernet_dhcp_enabled, &options.ethernet_ip_address, 
+            &options.ethernet_subnet_mask, &options.ethernet_gateway, &options.ethernet_dns)
+    {
+        Ok(settings) => settings,
+        Err(e) => return Ok(Response::with((status::InternalServerError, e))),
+    };
+
+    // set the interface name in for the collector
+    validated_ethernet_settings.adapter_name = sd_collector_interface;
+
+    // wifi
+    // TODO are these always correct in the ethernet enabled case.
+    let wifi_settings = NetworkSettings {
+        adapter_name: "wlan0".to_string(),
+        dhcp_enabled: false,
+        ip_address: "0.0.0.0".parse().unwrap(),
+        gateway: "0.0.0.0".parse().unwrap(),
+        netmask: "0.0.0.0".parse().unwrap(),
+        dns: Vec::new(),
+    };
+
+    // setup ethernet adapter with new settings in config file.
+    let network_configured = match configure_system_network_settings(&validated_ethernet_settings, &wifi_settings) {
+        Ok(settings) => settings,
+        Err(e) => {
+            println!("Unable to set network configuration");
+            return Err(IronError::new(e, status::InternalServerError));
         }
     };
 
-    cfg.proxy_enabled = options.proxy_enabled;
-    cfg.cloud_storage_enabled = options.cloud_storage_enabled;
-    cfg.ethernet_dhcp_enabled = options.ethernet_dhcp_enabled;
+    //
+    // update all the configuration data and write it all out
+    //
 
     if options.cloud_storage_enabled {
         cfg.data_destination_url = options.destination_address;
@@ -277,79 +299,28 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         cfg.proxy_gateway_port = options.proxy_gateway_port;
     }
 
-    let sd_collector_interface = get_sd_collector_ethernet_interface(req).expect("Couldn't get request state at runtime!");
+    // if we get this far, update the configuration, it was successful.
+    cfg.proxy_enabled = options.proxy_enabled;
+    cfg.cloud_storage_enabled = options.cloud_storage_enabled;
+    cfg.ethernet_dhcp_enabled = options.ethernet_dhcp_enabled;
+    cfg.ethernet_ip_address = options.ethernet_ip_address;
+    cfg.ethernet_subnet_mask = options.ethernet_subnet_mask;
+    cfg.ethernet_gateway = options.ethernet_gateway;
 
-    if !options.ethernet_dhcp_enabled {
-        // can use unwrap_or() ?
-        // validate the addresses.
-        let ipv4_ethernet_address = match Ipv4Addr::from_str(&options.ethernet_ip_address) {
-            Ok(eth) => eth,
-            _ => return Ok(Response::with((status::Unauthorized, "Bad ethernet address")))
-        };
-
-        let ipv4_subnet_mask = match Ipv4Addr::from_str(&options.ethernet_subnet_mask) {
-            Ok(eth) => eth,
-            _ => return Ok(Response::with((status::Unauthorized, "Bad subnet mask")))
-        };
-
-        let ipv4_gateway = match Ipv4Addr::from_str(&options.ethernet_gateway) {
-            Ok(eth) => eth,
-            _ => return Ok(Response::with((status::Unauthorized, "Bad gateway")))
-        };
-
-        let vec_dns: Vec<&str> = options.ethernet_dns.split(',').collect();
-        let mut ethernet_dns_entries = Vec::new();
-        for v in vec_dns {
-            let trimmed_ip = v.trim();
-            match trimmed_ip.parse::<Ipv4Addr>() {
-                Ok(entry) => ethernet_dns_entries.push(entry),
-                Err(e) => {
-                    println!("Invalid dns entry {} {:?}", v, e);
-                    return Err(IronError::new(e, status::InternalServerError))
-                }
-            };
-        }
-        ethernet_dns_entries.dedup();
-
-        match set_ip_and_netmask(&options.ethernet_ip_address, &options.ethernet_subnet_mask, &sd_collector_interface) {
-            Ok(()) => (),
-            _ => return Ok(Response::with((status::InternalServerError, "Failed to set IP and netmask")))
-        };
-
-        match set_gateway(&options.ethernet_gateway) {
-            Ok(()) => (),
-            _ => return Ok(Response::with((status::InternalServerError, "Failed to set gateway")))
-        };
-
-        match set_dns(&ethernet_dns_entries) {
-            Ok(()) => (),
-            _ => return Ok(Response::with((status::InternalServerError, "Failed to set dns")))
-        };
-
-        // if we get this far, update the configuration, it was successful.
-        cfg.ethernet_ip_address = options.ethernet_ip_address;
-        cfg.ethernet_subnet_mask = options.ethernet_subnet_mask;
-        cfg.ethernet_gateway = options.ethernet_gateway;
-
-        // convert to strings for assignment
-        cfg.ethernet_dns = [].to_vec();
-        for ns in ethernet_dns_entries {
-            cfg.ethernet_dns.push(ns.to_string());
-        }
-
-        //update the sd collecto xml file
-        update_sd_collector_xml(&cfg);
-
-    } else {
-        /*
-        let dhcp_on = match enable_system_dhcp(sd_collector_interface) {
-            Ok(dhcp) => dhcp,
-            Err(e) => {
-                println!("Failed to enable dhcp on system.  May result in incorret network settings.");
-                return Ok(Response::with((status::InternalServerError, "Failed enable dhcp on system.")))
-            }
-        };*/
+    // convert to strings for assignment
+    cfg.ethernet_dns = [].to_vec();
+    for ns in validated_ethernet_settings.dns {
+        cfg.ethernet_dns.push(ns.to_string());
     }
+
+    //
+    // Update the sd collecto xml file
+    //
+    update_sd_collector_xml(&cfg, SD_COLLECTOR_XML_FILE);
+
+    //
+    // Write out the cfg file for the next server change.
+    //
     
     let status = match write_diagnostics_config(&cfg) {
         Ok(s) => s,
@@ -408,11 +379,13 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
         Some(settings) => settings,
         None => {
             println!("No network settings returned");
-                NetworkSettings{ip_address: "0.0.0.0".parse().unwrap(),
-                                netmask: "0.0.0.0".parse().unwrap(),
-                                gateway: "0.0.0.0".parse().unwrap(),
-                                dns: Vec::new(),
-                                }
+            NetworkSettings{
+                            dhcp_enabled: false,
+                            ip_address: "0.0.0.0".parse().unwrap(),
+                            netmask: "0.0.0.0".parse().unwrap(),
+                            gateway: "0.0.0.0".parse().unwrap(),
+                            dns: Vec::new(),
+                            adapter_name: "not_valid".to_string()}
         }
     };
 
@@ -472,7 +445,7 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
         resp.headers.append_raw("Set-Cookie", cookie_str.into_bytes());
     }
 
-    println!("server response:\n{:?}", resp);
+    //println!("server response:\n{:?}", resp);
     Ok(resp)
 }
 
@@ -496,95 +469,16 @@ pub fn exit_with_error2(exit_tx: &Sender<ExitResult>, error: String) {
     println!("failed a sender command err"); 
 }
 
-pub fn set_ip_and_netmask(ip_address: &str, netmask: &str, interface_name: &str) -> Result<(), String> {
-
-    let ifconfig_str = "ifconfig ".to_string() + interface_name + ip_address + " netmask " + netmask;
-
-    //println!("Do the ifconfig command {}", ifconfig_str);
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg(ifconfig_str)
-        .output()
-        .expect("failed to execute process");
-
-    let out = output.stdout;
-    if out.len() != 0 {
-        return Err(String::from_utf8(out).unwrap());
-    }
-    Ok(())
-}
-
-pub fn set_gateway(gateway: &str) -> Result<(), String> {
-
-    // TODO: Make sure the route does not already exist, if so its a noop.
-
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg("route add default ")
-        .arg(gateway)
-        .output()
-        .expect("failed to execute process");
-
-    let out = output.stdout;
-    if out.len() != 0 {
-        return Err(String::from_utf8(out).unwrap());
-    }
-    Ok(())
-}
-
-pub fn set_dns(dns_entries: &Vec<Ipv4Addr>) -> Result<(), String> {
-
-    // only track new entries to be inserted, first drop any dups by comparing against resolv.conf
-    // then insert only new entries at the end (if any)
-    let current_dns_entries = match get_dns_entries() {
-        Some(cur) => cur,
-        None => return Err("Couldn't read /etc/resolv.conf".to_string())
-    };
-
-    let mut new_entries = Vec::new();
-    for entry in dns_entries {
-        let mut found = false;
-        for cur in &current_dns_entries {
-            if cur == entry {
-                found = true;
-                break;
-            }
-        }
-        if found == false {
-            new_entries.push(entry);
-        }
-    }
-
-    println!("Insert these {:?}", new_entries);
-
-    //FIXME: Get all the 'namespace xxx.xxx.xxx.xxx' entries in a single vec and insert in one call.
-    for entry in new_entries {
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg("echo nameserver ")
-            .arg(entry.to_string())
-            .arg(" >> /etc/resolv.conf")
-            .output()
-            .expect("failed to update resolv.conf");
-
-        let out = output.stdout;
-        if out.len() != 0 {
-            return Err(String::from_utf8(out).unwrap());
-        } 
-    }
-    Ok(())
-}
-
-pub fn get_network_settings(adapter: &str) -> Option<NetworkSettings> {
-    let ip_address = match get_ip_for_adapter(adapter) {
+pub fn get_network_settings(adapter_name: &str) -> Option<NetworkSettings> {
+    let ip_address = match get_ip_for_adapter(adapter_name) {
         Some(ip_address) => ip_address,
         None => return None,
     };
-    let netmask = match get_netmask_for_adapter(adapter) {
+    let netmask = match get_netmask_for_adapter(adapter_name) {
         Some(netmask) => netmask,
         None => return None,
     };
-    let gateway = match get_gateway_for_adapter(adapter) {
+    let gateway = match get_gateway_for_adapter(adapter_name) {
         Some(gateway) => gateway,
         None => return None,
     };
@@ -593,7 +487,14 @@ pub fn get_network_settings(adapter: &str) -> Option<NetworkSettings> {
         None => return None,
     };
 
-    Some(NetworkSettings{ip_address, netmask, gateway, dns})
+    // FIXME: Can we determine if dhcp is already on this way?
+    // we chould check for a running dhclient or dhcpcd on the sd_collector interface?
+    Some(NetworkSettings{adapter_name: adapter_name.to_string(), 
+        dhcp_enabled: false,
+        ip_address: ip_address,
+        netmask: netmask,
+        gateway: gateway,
+        dns: dns})
 }
 
 // get ip and netmask for the adapter
@@ -618,7 +519,6 @@ pub fn get_ip_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     None
 }
 
-//TODO: Add cookie secure and database
 pub fn load_auth_file(file_path: &str) -> io::Result<Auth> {
     let mut data = String::new();
     let mut f = File::open(file_path)?;
@@ -642,6 +542,17 @@ pub fn load_file_as_string(file_path: &str) -> io::Result<String> {
     Ok(data)
 }
 
+pub fn write_file_contents(data: &str, file_path: &str) -> io::Result<()> {
+    let mut f = OpenOptions::new().write(true).truncate(true).open(file_path)?;
+    let bytes_out = f.write(data.as_bytes())?;
+    let file_len = data.as_bytes().len();
+    if bytes_out != file_len {
+        let err_str = format!("Could not write all the data out, wrote {} of {} bytes to {}", bytes_out, file_len, file_path);
+        return Err(io::Error::new(InvalidData, err_str))
+    }
+    Ok(())
+}
+
 pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), io::Error> {
     let mut f = OpenOptions::new().write(true).truncate(true).open(CFG_FILE)?;
     let data = match serde_json::to_string(&config) {
@@ -660,9 +571,81 @@ pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
     } else {
         return None;
     }
-} 
+}
 
-fn enable_system_dhcp(sd_collector_interface: &str) -> IronResult<String> {
-    println!("Todo, enable dhcp on the system!");
-    Ok("FIXME".to_string())
+fn validate_network_settings(dhcp_enabled: bool, ip_address: &str, netmask: &str, gateway: &str, dns: &str)
+    -> Result<NetworkSettings, String> 
+ {
+     let adapter_name = "".to_string();
+     if dhcp_enabled {
+         return Ok(NetworkSettings{ 
+             adapter_name: adapter_name, 
+             dhcp_enabled: true,
+             ip_address: "0.0.0.0".parse().unwrap(),
+             netmask: "0.0.0.0".parse().unwrap(),
+             gateway: "0.0.0.0".parse().unwrap(),
+             dns: Vec::new(),
+         });
+     } 
+
+    //static
+    let valid_ip_address = match Ipv4Addr::from_str(&ip_address) {
+        Ok(eth) => eth,
+        _ => return Err("Bad ethernet address".to_string())
+    };
+
+    let valid_netmask = match Ipv4Addr::from_str(&netmask) {
+        Ok(eth) => eth,
+        _ => return Err("Bad subnet mask".to_string())
+    };
+
+    let valid_gateway = match Ipv4Addr::from_str(&gateway) {
+        Ok(eth) => eth,
+        _ => return Err("Bad gateway".to_string())
+    };
+
+    let vec_dns: Vec<&str> = dns.split(',').collect();
+    let mut valid_dns_entries = Vec::new();
+    for v in vec_dns {
+        let trimmed_ip = v.trim();
+        match trimmed_ip.parse::<Ipv4Addr>() {
+            Ok(entry) => valid_dns_entries.push(entry),
+            Err(e) => {
+                let err_str = format!("Invalid dns entry {} {:?}", v, e);
+                return Err(err_str);
+            }
+        };
+    }
+    valid_dns_entries.dedup();
+
+    // return static setup
+    let settings = NetworkSettings{adapter_name: adapter_name,
+        dhcp_enabled: false,
+        ip_address: valid_ip_address, 
+        netmask: valid_netmask,
+        gateway: valid_gateway, 
+        dns: valid_dns_entries};
+
+    Ok(settings)
+}
+
+// configure all the network settings in one go.
+// wifi and ethernet.
+fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_settings: &NetworkSettings) -> io::Result<bool>
+{
+    let mut etc_network_interfaces = match load_file_as_string(NETWORK_INTERFACES_CFG) {
+        Ok(data) => data,
+        Err(e) => { return Err(e) }
+    };
+
+    //keep everything with a #comment line and write it to the output.
+
+    // write ethernet settings
+
+
+    // write wifi settings
+
+
+    // write out the file
+    Ok(true)
 }

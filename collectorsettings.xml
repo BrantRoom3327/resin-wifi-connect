@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <SmartDiagnosticsConfiguration>
  <Settings>
-   <PrometheusUrl>https://c.kcftech.com/restup/</PrometheusUrl>
-   <ProxySettings>{"Enabled":false,"Server":null,"Port":0,"UseDefaultCredentials":true,"User":null,"Password":null}</ProxySettings>
+   <PrometheusUrl>http://www.google.com/</PrometheusUrl>
+   <ProxySettings>{"Enabled":false,"Server":"127.0.0.1","Port":12345,"UseDefaultCredentials":false,"User":"Username","Password":"Pass"}</ProxySettings>
    <NetworkId>1178B3AD</NetworkId>
    <AutoJoinReceiverSubnet>192.168.151.100,255.255.255.0</AutoJoinReceiverSubnet>
  </Settings>

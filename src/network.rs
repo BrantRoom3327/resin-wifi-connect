@@ -4,15 +4,10 @@ use std::time::Duration;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::error::Error;
 use std::net::Ipv4Addr;
-
-use network_manager::{AccessPoint, Connection, ConnectionState, Connectivity, Device, DeviceType,
-                      NetworkManager, ServiceState};
-
+use network_manager::{AccessPoint, Connection, Connectivity, Device, DeviceType, NetworkManager, ServiceState};
 use {exit, ExitResult};
 use config::Config;
-use dnsmasq::start_dnsmasq;
 use server::start_server;
-use kcf::*;
 
 pub enum NetworkCommand {
     Activate,

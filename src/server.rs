@@ -22,7 +22,7 @@ use {exit, ExitResult};
 use rand::*;
 use std::str;
 use kcf::*;
-use hbs::{Template, HandlebarsEngine, DirectorySource};
+use hbs::{HandlebarsEngine, DirectorySource};
 
 #[derive(Debug)]
 pub struct RequestSharedState {
