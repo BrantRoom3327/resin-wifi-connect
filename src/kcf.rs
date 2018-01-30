@@ -31,11 +31,9 @@ pub const CONFIG_TEMPLATE_NAME: &str = "config";
 pub const STATUS_TEMPLATE_NAME: &str = "status";
 //pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
 
-//Files we read or write
+//Files we read for configuration
 pub const AUTH_FILE: &str = "auth.json";
 pub const CFG_FILE: &str = "cfg.json";
-pub const NETWORK_INTERFACES_CFG_FILE: &str = "etc_network_interfaces";
-pub const SD_COLLECTOR_XML_FILE: &str = "collectorsettings.xml";
 
 //interface settings
 pub const DEFAULT_COLLECTOR_ETHERNET_INTERFACE: &str = "eth0";
@@ -95,6 +93,8 @@ pub struct SmartDiagnosticsConfig {
 
     // master key used to generate cookie hashes.
     pub cookie_key: String,
+    pub network_cfg_file: String, // generally will be /etc/network/interfaces but if you are testing it can be something else.
+    pub collector_cfg_file: String, // The sdcollector.xml file that the sdcollector reads for proxy settings.
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -113,10 +113,9 @@ pub struct SetConfigOptionsFromPost {
     pub proxy_gateway_port: u16,
 }
 
-
 #[allow(non_snake_case)]
 #[derive(Serialize)]
-pub struct sd_collector_proxy_settings {
+pub struct SDCollectoProxySettings {
     pub Enabled: bool,
     pub Server: String,
     pub Port: u16,
@@ -126,7 +125,7 @@ pub struct sd_collector_proxy_settings {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Auth{
+pub struct Auth {
     pub username: String,
     pub password: String,
 }
@@ -186,9 +185,9 @@ pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool
 
 // instead of wiping the line, wipe the data between begin and end tags and insert new.
 // FIXME: Add some more error checking
-pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig, file_path: &str) {
+pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) {
 
-    let mut xml_data = match load_file_as_string(file_path) {
+    let mut xml_data = match load_file_as_string(&cfg.collector_cfg_file) {
         Ok(xml) => xml,
         Err(e) => return,
     };
@@ -221,7 +220,7 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig, file_path: &str) {
     let drained_of_settings: String = xml_data.drain(proxy_settings_start..proxy_settings_end).collect();
 
     // now inject the data, starting at the end of the start tag
-    let mut collector_settings = sd_collector_proxy_settings {
+    let mut collector_settings = SDCollectoProxySettings {
         Enabled: cfg.proxy_enabled,
         Server: cfg.proxy_gateway.clone(),
         Port: cfg.proxy_gateway_port,
@@ -238,7 +237,7 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig, file_path: &str) {
     xml_data.insert_str(proxy_settings_start, &collector_string);
     //println!("xml at end\n{}", xml_data);
 
-    write_file_contents(&xml_data, file_path);
+    write_file_contents(&xml_data, &cfg.collector_cfg_file);
 }
 
 // 
@@ -284,7 +283,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     };
 
     // setup ethernet adapter with new settings in config file.
-    let network_configured = match configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, NETWORK_INTERFACES_CFG_FILE) {
+    let network_configured = match configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, &cfg.network_cfg_file) {
         Ok(settings) => settings,
         Err(e) => {
             println!("Unable to set network configuration");
@@ -324,7 +323,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     //
     // Update the sd collecto xml file
     //
-    update_sd_collector_xml(&cfg, SD_COLLECTOR_XML_FILE);
+    update_sd_collector_xml(&cfg);
 
     //
     // Write out the cfg file for the next server change.

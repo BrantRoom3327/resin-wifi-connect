@@ -2,19 +2,16 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::error::Error;
 use std::fmt;
 use std::net::Ipv4Addr;
-
 use serde_json;
 use path::PathBuf;
 use iron::prelude::*;
-use iron::{headers, status, typemap, AfterMiddleware, Iron, IronError, IronResult, Request,
-           Response, Url};
+use iron::{headers, status, typemap, AfterMiddleware, Iron, IronError, IronResult, Request, Response, Url};
 use iron::modifiers::Redirect;
 use router::Router;
 use staticfile::Static;
 use mount::Mount;
 use persistent::Write;
 use params::{FromValue, Params};
-
 use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
 
