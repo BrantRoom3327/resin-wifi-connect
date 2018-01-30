@@ -8,12 +8,11 @@ use std::sync::mpsc::Sender;
 use cookie::{CookieJar, Cookie, Key, SameSite};
 use iron::{Request, Response, IronResult, status, IronError, Url};
 use std::fs::OpenOptions;
-use std::io::{Write, Read};
+use std::io::{Write, Read, Error, ErrorKind};
 use std::io;
 use serde_json;
 use std::fs::File;
 use std::fmt;
-use std::fmt::Error;
 use iron::Set;
 use hbs::Template;
 use std::io::ErrorKind::InvalidData;
@@ -258,7 +257,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
             &options.ethernet_subnet_mask, &options.ethernet_gateway, &options.ethernet_dns)
     {
         Ok(settings) => settings,
-        Err(e) => return Ok(Response::with((status::InternalServerError, e))),
+        Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
 
     // set the interface name in for the collector
@@ -276,7 +275,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     };
 
     // setup ethernet adapter with new settings in config file.
-    let network_configured = match configure_system_network_settings(&validated_ethernet_settings, &wifi_settings) {
+    let network_configured = match configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, NETWORK_INTERFACES_CFG) {
         Ok(settings) => settings,
         Err(e) => {
             println!("Unable to set network configuration");
@@ -535,7 +534,7 @@ pub fn load_diagnostics_config_file(filename: &str) -> io::Result<SmartDiagnosti
     Ok(cfg)
 }
 
-pub fn load_file_as_string(file_path: &str) -> io::Result<String> {
+pub fn load_file_as_string(file_path: &str) -> Result<String, io::Error> {
     let mut data = String::new();
     let mut f = File::open(file_path)?;
     f.read_to_string(&mut data)?;
@@ -553,7 +552,7 @@ pub fn write_file_contents(data: &str, file_path: &str) -> io::Result<()> {
     Ok(())
 }
 
-pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> Result<(), io::Error> {
+pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> io::Result<()> {
     let mut f = OpenOptions::new().write(true).truncate(true).open(CFG_FILE)?;
     let data = match serde_json::to_string(&config) {
         Ok(computer) => computer,
@@ -574,7 +573,7 @@ pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
 }
 
 fn validate_network_settings(dhcp_enabled: bool, ip_address: &str, netmask: &str, gateway: &str, dns: &str)
-    -> Result<NetworkSettings, String> 
+    -> Result<NetworkSettings, io::Error> 
  {
      let adapter_name = "".to_string();
      if dhcp_enabled {
@@ -588,20 +587,19 @@ fn validate_network_settings(dhcp_enabled: bool, ip_address: &str, netmask: &str
          });
      } 
 
-    //static
     let valid_ip_address = match Ipv4Addr::from_str(&ip_address) {
         Ok(eth) => eth,
-        _ => return Err("Bad ethernet address".to_string())
+        Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse ip address!")),
     };
 
     let valid_netmask = match Ipv4Addr::from_str(&netmask) {
-        Ok(eth) => eth,
-        _ => return Err("Bad subnet mask".to_string())
+        Ok(nm) => nm,
+        Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse subnet mask!")),
     };
 
     let valid_gateway = match Ipv4Addr::from_str(&gateway) {
-        Ok(eth) => eth,
-        _ => return Err("Bad gateway".to_string())
+        Ok(gw) => gw,
+        Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse gateway!")),
     };
 
     let vec_dns: Vec<&str> = dns.split(',').collect();
@@ -610,10 +608,7 @@ fn validate_network_settings(dhcp_enabled: bool, ip_address: &str, netmask: &str
         let trimmed_ip = v.trim();
         match trimmed_ip.parse::<Ipv4Addr>() {
             Ok(entry) => valid_dns_entries.push(entry),
-            Err(e) => {
-                let err_str = format!("Invalid dns entry {} {:?}", v, e);
-                return Err(err_str);
-            }
+            Err(e) => return Err(Error::new(ErrorKind::Other, "Invalid DNS entry!")),
         };
     }
     valid_dns_entries.dedup();
@@ -631,21 +626,83 @@ fn validate_network_settings(dhcp_enabled: bool, ip_address: &str, netmask: &str
 
 // configure all the network settings in one go.
 // wifi and ethernet.
-fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_settings: &NetworkSettings) -> io::Result<bool>
+fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_settings: &NetworkSettings, file_path: &str) 
+    -> Result<(), io::Error>
 {
-    let mut etc_network_interfaces = match load_file_as_string(NETWORK_INTERFACES_CFG) {
+    let input_config_data = match load_file_as_string(file_path) {
         Ok(data) => data,
-        Err(e) => { return Err(e) }
+         Err(e) => return Err(Error::new(ErrorKind::Other, "configure_system_network_settings(): could not load the file!")),
     };
 
+    let mut output_config_data = String::new();
+
     //keep everything with a #comment line and write it to the output.
+    for line in input_config_data.lines() {
+        let offset = line.find("#").unwrap_or(input_config_data.len());
+        if offset == 0 { //starts with a #comment
+            let saved_line = line.to_string() + "\n";
+            output_config_data.push_str(&saved_line);
+        }
+    }
 
-    // write ethernet settings
+    // loopback
+    output_config_data.push_str("\nauto lo\n");
+    output_config_data.push_str("iface lo inet loopback\n\n");
 
+    // order of configuraton
+    // if wifi_settings.dhcp_enabled is on, enable wifi on wlan adapter interface
+    // disable the ethernet adapter (shouldn't be used for sd collector)
+    // else if eithernet dhcp is on, don't use wifi
+    // else ethernet static settings should be applied, and also don't use wifi
 
-    // write wifi settings
+    // Consider turning the strings into packages to drop into the format! macro
 
+    if wifi_settings.dhcp_enabled {
+        // enable dhcp for wifi adapter
+        output_config_data.push_str(&format!("auto {}\n", wifi_settings.adapter_name));
+        output_config_data.push_str(&format!("allow-hotplpug {}\n", wifi_settings.adapter_name));
+        output_config_data.push_str(&format!("iface {} inet dhcp\n", wifi_settings.adapter_name));
+        output_config_data.push_str("wpa-conf /etc/wpa_supplicant/wpa_suppplicant.conf\n");
+        output_config_data.push_str("iface default inet dhcp\n\n");
 
-    // write out the file
-    Ok(true)
+        // disable ethernet here
+        output_config_data.push_str(&format!("auto {}\n", ethernet_settings.adapter_name));
+        output_config_data.push_str(&format!("iface {} down\n\n", ethernet_settings.adapter_name));
+
+    } else if ethernet_settings.dhcp_enabled {
+
+        //enable dhcp for ethernet adapter
+        output_config_data.push_str(&format!("auto {}\n", ethernet_settings.adapter_name));
+        output_config_data.push_str(&format!("iface {} inet dhcp\n\n", ethernet_settings.adapter_name));
+
+        // disable wifi here
+        output_config_data.push_str(&format!("auto {}\n", wifi_settings.adapter_name));
+        output_config_data.push_str(&format!("iface {} down\n\n", wifi_settings.adapter_name));
+
+    } else {
+
+        // enable static addressing for adapter
+        output_config_data.push_str(&format!("auto {}\n", ethernet_settings.adapter_name));
+        output_config_data.push_str(&format!("iface {} inet static\n", ethernet_settings.adapter_name));
+        output_config_data.push_str(&format!("address {}\n", ethernet_settings.ip_address.to_string()));
+        output_config_data.push_str(&format!("netmask {}\n", ethernet_settings.netmask.to_string()));
+        output_config_data.push_str(&format!("gateway {}\n", ethernet_settings.gateway.to_string()));
+
+        output_config_data.push_str("dns-nameservers "); 
+        for ns in &ethernet_settings.dns {
+            output_config_data.push_str(&format!("{},", ethernet_settings.gateway.to_string()));
+        }
+        output_config_data.push_str("\n\n");
+
+        //turn off wifi
+        output_config_data.push_str(&format!("auto {}\n", wifi_settings.adapter_name));
+        output_config_data.push_str(&format!("iface {} down\n\n", wifi_settings.adapter_name));
+    }
+
+    let wrote_file = match write_file_contents(&output_config_data, file_path) {
+        Ok(wrote) => wrote,
+        Err(e) => return Err(e),
+    };
+
+    Ok(())
 }
