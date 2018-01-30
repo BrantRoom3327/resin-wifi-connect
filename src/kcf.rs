@@ -235,7 +235,6 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) {
     };
 
     xml_data.insert_str(proxy_settings_start, &collector_string);
-    //println!("xml at end\n{}", xml_data);
 
     write_file_contents(&xml_data, &cfg.collector_cfg_file);
 }
@@ -639,7 +638,10 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
 {
     let input_config_data = match load_file_as_string(file_path) {
         Ok(data) => data,
-         Err(e) => return Err(Error::new(ErrorKind::Other, "configure_system_network_settings(): could not load the file!")),
+         Err(e) => {
+            println!("Could not load config file {}", file_path);
+            return Err(Error::new(ErrorKind::Other, "configure_system_network_settings(): could not load the file!"));
+         }
     };
 
     let mut output_config_data = String::new();
