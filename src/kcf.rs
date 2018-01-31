@@ -17,6 +17,7 @@ use iron::Set;
 use hbs::Template;
 use std::io::ErrorKind::InvalidData;
 use server::{collect_set_config_options, collect_do_auth_options, get_kcf_runtime_data};
+use num::FromPrimitive;
 
 #[cfg(target_os = "linux")]
 use linux::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
@@ -58,6 +59,16 @@ pub const COOKIE_NAME: &str = "tastybiscuits";
 pub const COOKIE_VALUE: &str = "lemonShortbread";
 pub const COOKIE_EXPIRES_HOURS: i32 = 1;
 
+enum_from_primitive! {
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    pub enum NetworkCfgType {
+        Ethernet_DHCP = 0,
+        Ethernet_Static = 1,
+        Wifi_DHCP = 2,
+        Invalid = 3,
+    }
+}
+
 //
 // KCF Only Routes and functions, kept out of mainline files to avoid conflicts.
 //
@@ -67,7 +78,7 @@ pub struct NetworkSettings {
     pub dhcp_enabled: bool,
     pub ip_address: Ipv4Addr,
     pub netmask: Ipv4Addr,
-    pub gateway: Ipv4Addr, 
+    pub gateway: Ipv4Addr,
     pub dns: Vec<Ipv4Addr>,
 }
 
@@ -77,8 +88,10 @@ pub struct SmartDiagnosticsConfig {
     pub cloud_storage_enabled: bool,
     pub data_destination_url: String,
 
-    //replace with a NetworkSettings?
-    pub ethernet_dhcp_enabled: bool,
+    // this is how the network supposted to be configured
+    pub network_configuration_type: u8,  //at runtime a NetworkCfgType
+
+    //ethernet static settings
     pub ethernet_ip_address: String,
     pub ethernet_subnet_mask: String,
     pub ethernet_gateway: String,
@@ -101,7 +114,9 @@ pub struct SmartDiagnosticsConfig {
 pub struct SetConfigOptionsFromPost {
     pub cloud_storage_enabled: bool,
     pub destination_address: String,
-    pub ethernet_dhcp_enabled: bool,
+    pub network_configuration_type: u8,
+    pub wifi_ssid: String,
+    pub wifi_passphrase: String,
     pub ethernet_ip_address: String,
     pub ethernet_subnet_mask: String,
     pub ethernet_gateway: String,
@@ -260,11 +275,21 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         Ok(cfg) => cfg,
         Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
-    
+
+    // make sure the network configuration type gets validated here and type converted
+    let network_configuration_type = match get_network_cfg_type(options.network_configuration_type) {
+        Some(net) => net,
+        None => {
+            return Err(IronError::new(io::Error::new(InvalidData, format!("Invalid network configuration value")), status::InternalServerError));
+        }
+    };
 
     let mut validated_ethernet_settings = match validate_network_settings(
-            options.ethernet_dhcp_enabled, &options.ethernet_ip_address, 
-            &options.ethernet_subnet_mask, &options.ethernet_gateway, &options.ethernet_dns)
+            &network_configuration_type, 
+            &options.ethernet_ip_address, 
+            &options.ethernet_subnet_mask, 
+            &options.ethernet_gateway,
+            &options.ethernet_dns)
     {
         Ok(settings) => settings,
         Err(err) => return Err(IronError::new(err, status::InternalServerError)),
@@ -312,12 +337,12 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     // if we get this far, update the configuration, it was successful.
     cfg.proxy_enabled = options.proxy_enabled;
     cfg.cloud_storage_enabled = options.cloud_storage_enabled;
-    cfg.ethernet_dhcp_enabled = options.ethernet_dhcp_enabled;
+    cfg.network_configuration_type = options.network_configuration_type;
+
+    // static settings
     cfg.ethernet_ip_address = options.ethernet_ip_address;
     cfg.ethernet_subnet_mask = options.ethernet_subnet_mask;
     cfg.ethernet_gateway = options.ethernet_gateway;
-
-    // convert to strings for assignment
     cfg.ethernet_dns = [].to_vec();
     for ns in validated_ethernet_settings.dns {
         cfg.ethernet_dns.push(ns.to_string());
@@ -583,12 +608,19 @@ pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
     }
 }
 
-fn validate_network_settings(dhcp_enabled: bool, ip_address: &str, netmask: &str, gateway: &str, dns: &str)
+fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_address: &str, netmask: &str, gateway: &str, dns: &str)
     -> Result<NetworkSettings, io::Error> 
  {
      let adapter_name = "".to_string();
-     if dhcp_enabled {
-         return Ok(NetworkSettings{ 
+
+    // we now have network_configuration_type:
+    // * Eth0 static
+    // * Eth0 dhcp
+    // * wifi dhcp
+
+    if network_configuration_type == &NetworkCfgType::Ethernet_DHCP {
+        // return invalid static info, we are using dhcp
+        return Ok(NetworkSettings{ 
              adapter_name: adapter_name, 
              dhcp_enabled: true,
              ip_address: "0.0.0.0".parse().unwrap(),
@@ -596,43 +628,60 @@ fn validate_network_settings(dhcp_enabled: bool, ip_address: &str, netmask: &str
              gateway: "0.0.0.0".parse().unwrap(),
              dns: Vec::new(),
          });
-     } 
 
-    let valid_ip_address = match Ipv4Addr::from_str(&ip_address) {
-        Ok(eth) => eth,
-        Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse ip address!")),
-    };
+    } else if network_configuration_type == &NetworkCfgType::Ethernet_Static {
 
-    let valid_netmask = match Ipv4Addr::from_str(&netmask) {
-        Ok(nm) => nm,
-        Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse subnet mask!")),
-    };
-
-    let valid_gateway = match Ipv4Addr::from_str(&gateway) {
-        Ok(gw) => gw,
-        Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse gateway!")),
-    };
-
-    let vec_dns: Vec<&str> = dns.split(',').collect();
-    let mut valid_dns_entries = Vec::new();
-    for v in vec_dns {
-        let trimmed_ip = v.trim();
-        match trimmed_ip.parse::<Ipv4Addr>() {
-            Ok(entry) => valid_dns_entries.push(entry),
-            Err(e) => return Err(Error::new(ErrorKind::Other, "Invalid DNS entry!")),
+        let valid_ip_address = match Ipv4Addr::from_str(&ip_address) {
+            Ok(eth) => eth,
+            Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse ip address!")),
         };
+    
+        let valid_netmask = match Ipv4Addr::from_str(&netmask) {
+            Ok(nm) => nm,
+            Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse subnet mask!")),
+        };
+    
+        let valid_gateway = match Ipv4Addr::from_str(&gateway) {
+            Ok(gw) => gw,
+            Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse gateway!")),
+        };
+    
+        let vec_dns: Vec<&str> = dns.split(',').collect();
+        let mut valid_dns_entries = Vec::new();
+        for v in vec_dns {
+            let trimmed_ip = v.trim();
+            match trimmed_ip.parse::<Ipv4Addr>() {
+                Ok(entry) => valid_dns_entries.push(entry),
+                Err(e) => return Err(Error::new(ErrorKind::Other, "Invalid DNS entry!")),
+            };
+        }
+        valid_dns_entries.dedup();
+
+        // return static setup
+        return Ok(NetworkSettings{
+            adapter_name: adapter_name,
+            dhcp_enabled: false,
+            ip_address: valid_ip_address, 
+            netmask: valid_netmask,
+            gateway: valid_gateway, 
+            dns: valid_dns_entries});
+
+    } else if network_configuration_type == &NetworkCfgType::Wifi_DHCP {
+        // here we also want invalid ethernet settings but we want
+        // store the last connected SSID for future use when switching back and forth for the user.
+
+        //currently there is no info here, 
+        return Ok(NetworkSettings{ 
+             adapter_name: adapter_name, 
+             dhcp_enabled: true,
+             ip_address: "0.0.0.0".parse().unwrap(),
+             netmask: "0.0.0.0".parse().unwrap(),
+             gateway: "0.0.0.0".parse().unwrap(),
+             dns: Vec::new(),
+         });
+    } else {
+        return Err(Error::new(ErrorKind::Other, "validate_network_settings: Invalid Network configuration type!"));
     }
-    valid_dns_entries.dedup();
-
-    // return static setup
-    let settings = NetworkSettings{adapter_name: adapter_name,
-        dhcp_enabled: false,
-        ip_address: valid_ip_address, 
-        netmask: valid_netmask,
-        gateway: valid_gateway, 
-        dns: valid_dns_entries};
-
-    Ok(settings)
 }
 
 // configure all the network settings in one go.
@@ -731,4 +780,16 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
     };
 
     Ok(())
+}
+
+pub fn get_network_cfg_type(value: u8) -> Option<NetworkCfgType> {
+     let network_configuration_type = match NetworkCfgType::from_u8(value) {
+        Some(val) => val,
+        None => {
+            println!("invalid form value for network cfg type!");
+            return None;
+        }
+    };
+
+    Some(network_configuration_type)
 }

@@ -21,6 +21,7 @@ use std::str;
 use kcf::*;
 use hbs::{HandlebarsEngine, DirectorySource};
 use std::io;
+use num::FromPrimitive;
 
 #[derive(Debug)]
 pub struct RequestSharedState {
@@ -313,15 +314,24 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
     let proxy_password = get_param!(params, "proxy_password", String);
     let proxy_gateway = get_param!(params, "proxy_gateway", String);
     let proxy_gateway_port = get_param!(params, "proxy_gateway_port", u16);
-    let ethernet_dhcp_enabled = get_param!(params, "ethernet_dhcp_enabled", bool);
+
+    //see NetworkCfgType for the allowed values.
+    let network_configuration_type = get_param!(params, "network_configuration_type", u8);
+    println!("Network type is {}", network_configuration_type);
+
+    // wifi settings
+    let wifi_ssid = get_param!(params, "wifi_ssid", String);
+    let wifi_passphrase = get_param!(params, "wifi_passphrase", String);
+
+    // the static ethernet settings
     let ethernet_ip_address = get_param!(params, "ethernet_ip_address", String);
     let ethernet_subnet_mask = get_param!(params, "ethernet_subnet_mask", String);
     let ethernet_gateway = get_param!(params, "ethernet_gateway", String);
     let ethernet_dns = get_param!(params, "ethernet_dns", String);
 
     Ok(SetConfigOptionsFromPost{ cloud_storage_enabled, destination_address, proxy_enabled, proxy_login,
-        proxy_password, proxy_gateway, proxy_gateway_port, ethernet_dhcp_enabled, ethernet_ip_address, 
-        ethernet_subnet_mask, ethernet_gateway, ethernet_dns})
+        proxy_password, proxy_gateway, proxy_gateway_port, network_configuration_type, wifi_ssid, wifi_passphrase, 
+        ethernet_ip_address, ethernet_subnet_mask, ethernet_gateway, ethernet_dns})
 }
 
 pub fn collect_do_auth_options(req: &mut Request) -> IronResult<Auth> {

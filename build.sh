@@ -50,5 +50,7 @@ else
     #setting system params.  You will likely need to sudo the wifi-connect command below to actually set system params (ethernet settings).
     cargo build --features="no_hotspot"
     cp target/debug/wifi-connect .
+    #to find /sbin/ifconfig on the pi by default.
+    export PATH="$PATH:/sbin/" 
     ./wifi-connect --portal-gateway=192.168.1.148 --collector-ethernet=en0 --collector-wifi=wlan0
 fi

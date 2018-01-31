@@ -20,6 +20,8 @@ extern crate regex;
 extern crate mount;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate serde_derive;
+#[macro_use] extern crate enum_primitive;
+extern crate num;
 
 mod config;
 mod network;
