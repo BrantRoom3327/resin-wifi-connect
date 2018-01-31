@@ -703,8 +703,15 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
         output_config_data.push_str(&format!("gateway {}\n", ethernet_settings.gateway.to_string()));
 
         output_config_data.push_str("dns-nameservers "); 
+        let dns_len = ethernet_settings.dns.len();
+        let mut index = 0;
         for ns in &ethernet_settings.dns {
-            output_config_data.push_str(&format!("{},", ethernet_settings.gateway.to_string()));
+            output_config_data.push_str(&format!("{}", ethernet_settings.gateway.to_string()));
+            if index != (dns_len - 1) {
+                // if we are not on the last entry add a ,
+                output_config_data.push_str(", ");
+            }
+            index = index+1;
         }
         output_config_data.push_str("\n\n");
 
@@ -712,6 +719,8 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
         output_config_data.push_str(&format!("auto {}\n", wifi_settings.adapter_name));
         output_config_data.push_str(&format!("iface {} down\n\n", wifi_settings.adapter_name));
     }
+
+    println!("Config we would write\n{}", output_config_data);
 
     let wrote_file = match write_file_contents(&output_config_data, file_path) {
         Ok(wrote) => wrote,
