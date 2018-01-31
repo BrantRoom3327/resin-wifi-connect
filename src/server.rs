@@ -309,7 +309,7 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
     //cloud settings
     let cloud_storage_enabled = get_param!(params, "cloud_storage_enabled", bool);
     let destination_address = get_param!(params, "destinationaddress", String);
-    let proxy_enabled = get_param!(params, "proxy", bool);
+    let proxy_enabled = get_param!(params, "proxy_enabled", bool);
     let proxy_login = get_param!(params, "proxy_login", String);
     let proxy_password = get_param!(params, "proxy_password", String);
     let proxy_gateway = get_param!(params, "proxy_gateway", String);

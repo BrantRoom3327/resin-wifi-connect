@@ -114,67 +114,57 @@
 						<input type="radio" name="cloud_storage_enabled" value="1">Cloud&nbsp;
 						<input type="radio" name="cloud_storage_enabled" value="0">Network URL&nbsp;
 					</div>
-					
-					<div class="row cloud col-xs-12">
+					<div class="row show_cloud_settings col-xs-12">
 						<div class="col-md-2"><label for="destinationAddress">Destination</label></div>
 						<div class="col-xs-6">
 							<input type="text" class="form-control" name="destinationaddress" value="{{data_destination_url}}">
 								example: http://host-name-here:52000
 						</div>
 					</div>
-
 					<div class="row-spacer">
 						<p>&nbsp;</p>
 					</div>
 				</div>
 
-				<div class="row-spacer">
-					<p>&nbsp;</p>
-				</div>
-				
 				<div class="page-header">
 					<h3>Proxy Settings</h3>
 				</div>
-	
 				<div class="row col-xs-12">
 					<div class="col-xs-2"></div>
-					<div class="input-group col-xs-10" id="proxy-type" class="col-md-3" name="proxy-type">
-						&nbsp;&nbsp;&nbsp;&nbsp;
-							<input type="radio" name="proxy" id="proxy_off" value="0" {{#unless proxy_enabled}}checked="checked"{{/unless}}>Disable&nbsp;&nbsp;&nbsp;
-							<input type="radio" name="proxy" id="proxy_on" value="1" {{#if proxy_enabled}}checked="checked"{{/if}}>Enable
-							<input type="hidden" id="proxy-select" name="proxy-select">
+					<div class="input-group col-xs-10" id="proxy-type" class="col-md-3" name="proxy-type">&nbsp;&nbsp;&nbsp;&nbsp;
+						<input type="radio" name="proxy_enabled" value="0">Disable&nbsp;&nbsp;&nbsp;
+						<input type="radio" name="proxy_enabled" value="1">Enable&nbsp;
 					</div>
 				</div>
 				<br>
 	
-				<div class="row proxy col-xs-12">
-					<div class="col-md-2"><label for="proxy_login">Login</label></div>
-					<div class="col-xs-6">
-						<input type="text" class="form-control" name="proxy_login" value="{{proxy_login}}">
+				<div class="row show_proxy_settings col-xs-12">
+					<div class="row col-xs-12">
+						<div class="col-md-2"><label for="proxy_login">Login</label></div>
+						<div class="col-xs-6">
+							<input type="text" class="form-control" name="proxy_login" value="{{proxy_login}}">
+						</div>
+					</div>
+					<div class="row col-xs-12">
+						<div class="col-md-2"><label for="proxy_password">Password</label></div>
+						<div class="col-xs-6">
+							<input type="text" class="form-control" name="proxy_password" value="{{proxy_password}}">
+						</div>
+					</div>
+					<div class="row col-xs-12">
+						<div class="col-md-2"><label for="proxy_gateway">Gateway</label></div>
+						<div class="col-xs-6">
+							<input type="text" class="form-control" name="proxy_gateway" value="{{proxy_gateway}}">
+						</div>
+					</div>
+					<div class="row col-xs-12">
+						<div class="col-md-2"><label for="proxy_gateway_port">Port</label></div>
+						<div class="col-xs-6">
+							<input type="text" class="form-control" name="proxy_gateway_port" value="{{proxy_gateway_port}}">
+						</div>
 					</div>
 				</div>
-					
-				<div class="row proxy col-xs-12">
-					<div class="col-md-2"><label for="proxy_password">Password</label></div>
-					<div class="col-xs-6">
-						<input type="text" class="form-control" name="proxy_password" value="{{proxy_password}}">
-					</div>
-				</div>
-
-				<div class="row proxy col-xs-12">
-					<div class="col-md-2"><label for="proxy_gateway">Gateway</label></div>
-					<div class="col-xs-6">
-						<input type="text" class="form-control" name="proxy_gateway" value="{{proxy_gateway}}">
-					</div>
-				</div>
-
-				<div class="row proxy col-xs-12">
-					<div class="col-md-2"><label for="proxy_gateway_port">Port</label></div>
-					<div class="col-xs-6">
-						<input type="text" class="form-control" name="proxy_gateway_port" value="{{proxy_gateway_port}}">
-					</div>
-				</div>
-
+	
 				<div class="row spacer">
 					<button type="submit" id="updateDataSource" class='btn btn-success col-md-3'>Update Configuration</button>
 				</div>
@@ -195,34 +185,16 @@
 					var val = $(this).attr("value");
                     showHideCloudDiv(parseInt(val));
 				});
-
 				$("input[name='network_configuration_type']").on('click', function() {
 					var val = $(this).attr("value");
 					showHideNetworkDiv(parseInt(val));
 				});
-	
-				function ChooseProxy(checked){
-					if(checked == 'proxy_on') {
-						$('.proxy').show();
-					} else {
-						$('.proxy').hide();
-					}
-					$("#proxy-select").val(checked);
-				}
-				$("input[name='proxy']").on('click', function() {
-					ChooseProxy($(this).attr("id"));
+				$("input[name='proxy_enabled']").on('click', function() {
+					var val = $(this).attr("value");
+					showHideProxyDiv(parseInt(val));
 				});
-
-				// default setup of hide/show for cloud storage
-				if($('input[name=proxy]').is(':checked')){
-					var v = $('input[name=proxy]:checked').val();
-					if (v==1) {
-						$('.proxy').show();
-					} else {
-						$('.proxy').hide();
-					}
-				};
-
+	
+				//setup cloud default values
 				$(function() {
 					var $radios = $('input[name=cloud_storage_enabled]');
 					if($radios.is(':checked') === false) {
@@ -246,25 +218,49 @@
 					}
 				});
 
-				function showHideNetworkDiv(v) {
-					if (v===0) { // 0 means static ethernet
+				//setup proxy default values
+				$(function() {
+					var $radios = $('input[name=proxy_enabled]');
+					if($radios.is(':checked') === false) {
+						if ("{{proxy_enabled}}" === "true") {
+							$radios.filter('[value=1]').prop('checked', true);
+							showHideProxyDiv(1);
+						} else {
+							$radios.filter('[value=0]').prop('checked', true);
+							showHideProxyDiv(0);
+						}
+					}
+				});
+
+				// select the network type by default
+				function showHideNetworkDiv(val) {
+					if (val===0) { // 0 means static ethernet
 						$('.ethernet_static').show();
 						$('.wifi_dhcp').hide();
-					} else if (v==1) { //ethernet dhcp 
+					} else if (val===1) { //ethernet dhcp 
 						$('.ethernet_static').hide();
 						$('.wifi_dhcp').hide();
-					} else if (v==2) { // wifi dhcp
+					} else if (val===2) { // wifi dhcp
 						$('.ethernet_static').hide();
 						$('.wifi_dhcp').show();
 					}
 				};
 
 				function showHideCloudDiv(val) {
-					console.log("Show Hide cloud div given ", val);
+					//console.log("Show Hide cloud div given ", val);
 					if(val===1) {
-						$('.cloud').show();
+						$('.show_cloud_settings').show();
 					} else {
-						$('.cloud').hide();
+						$('.show_cloud_settings').hide();
+					}
+				}
+
+				function showHideProxyDiv(val) {
+					//console.log("Show Hide proxy div given", val);
+					if(val===1) {
+						$('.show_proxy_settings').show();
+					} else if (val===0) {
+						$('.show_proxy_settings').hide();
 					}
 				}
 				
