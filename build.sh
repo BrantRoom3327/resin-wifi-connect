@@ -52,5 +52,5 @@ else
     cp target/debug/wifi-connect .
     #to find /sbin/ifconfig on the pi by default.
     export PATH="$PATH:/sbin/" 
-    ./wifi-connect --portal-gateway=192.168.1.148 --collector-ethernet=en0 --collector-wifi=wlan0
+    ./wifi-connect --portal-gateway=192.168.1.148
 fi

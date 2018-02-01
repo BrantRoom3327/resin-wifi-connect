@@ -24,8 +24,6 @@ pub struct Config {
     pub ui_directory: PathBuf,
 
     //kcf section
-    pub collector_ethernet: String,  //kcf, "eth0" or "eth1" etc
-    pub collector_wifi: String,  //kcf, "wlan0" or "wlan1" etc
     pub hotspot_interface: String, // interface to run the wlan hotspot on.
 }
 
@@ -103,22 +101,6 @@ pub fn get_config() -> Config {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("collector-ethernet")
-                .short("e")
-                .long("collector-ethernet")
-                .value_name("collector_ethernet")
-                .help("Ethernet device (e.g eth0) for collector")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("collector-wifi")
-                .short("w")
-                .long("collector-wifi")
-                .value_name("collector_wifi")
-                .help("Wifi device (e.g wlan0) for collector")
-                .takes_value(true),
-        )
-        .arg(
             Arg::with_name("hotspot-interface")
                 .short("hs")
                 .long("hotspot-interface")
@@ -159,16 +141,6 @@ pub fn get_config() -> Config {
     )).expect("Cannot parse activity timeout");
 
     //kcf specific
-    let collector_ethernet = matches.value_of("collector-ethernet").map_or_else(
-        || env::var("COLLECTOR_ETHERNET").unwrap_or_else(|_| DEFAULT_COLLECTOR_ETHERNET_INTERFACE.to_string()),
-        String::from,
-    );
-
-    let collector_wifi = matches.value_of("collector-wifi").map_or_else(
-        || env::var("COLLECTOR_WIFI").unwrap_or_else(|_| DEFAULT_COLLECTOR_WIFI_INTERFACE.to_string()),
-        String::from,
-    );
-
     let hotspot_interface = matches.value_of("hotspot-interface").map_or_else(
         || env::var("HOTSPOT_INTERFACE").unwrap_or_else(|_| DEFAULT_HOTSPOT_INTERFACE.to_string()),
         String::from,
@@ -184,8 +156,6 @@ pub fn get_config() -> Config {
         dhcp_range,
         activity_timeout,
         ui_directory,
-        collector_ethernet,
-        collector_wifi,
         hotspot_interface,
     }
 }

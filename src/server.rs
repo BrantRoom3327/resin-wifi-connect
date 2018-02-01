@@ -131,8 +131,6 @@ pub fn start_server(
     network_tx: Sender<NetworkCommand>,
     exit_tx: Sender<ExitResult>,
     ui_directory: &PathBuf,
-    collector_ethernet: String,
-    collector_wifi: String,
 ) {
     let exit_tx_clone = exit_tx.clone();
 
@@ -162,15 +160,15 @@ pub fn start_server(
         cfg.cookie_key = new_key;
     }
 
+    let kcf = KCFRuntimeData {
+        http_server_address: gateway.to_string() + ":",
+        collector_ethernet_interface: cfg.collector_ethernet_interface.clone(),
+        collector_wifi_interface: cfg.collector_wifi_interface.clone(),
+    };
+
     let status = match write_diagnostics_config(&cfg) {
         Ok(s) => s,
         Err(err) => panic!("{:?}", err)
-    };
-
-    let kcf = KCFRuntimeData {
-        collector_ethernet,
-        collector_wifi,
-        http_server_address: gateway.to_string() + ":",
     };
 
     let mut request_state = RequestSharedState {

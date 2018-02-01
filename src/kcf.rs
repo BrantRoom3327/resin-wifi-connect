@@ -108,6 +108,8 @@ pub struct SmartDiagnosticsConfig {
     pub cookie_key: String,
     pub network_cfg_file: String, // generally will be /etc/network/interfaces but if you are testing it can be something else.
     pub collector_cfg_file: String, // The sdcollector.xml file that the sdcollector reads for proxy settings.
+    pub collector_ethernet_interface: String,  //the name of the ethernet adapter to configure for the collector "eth0", "eth1" etc
+    pub collector_wifi_interface: String,  //wlan0 or wlan1, etc
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -148,8 +150,8 @@ pub struct Auth {
 #[derive(Debug, Clone)]
 pub struct KCFRuntimeData {
     pub http_server_address: String,
-    pub collector_ethernet: String, 
-    pub collector_wifi: String, 
+    pub collector_ethernet_interface: String, 
+    pub collector_wifi_interface: String, 
 }
 
 impl fmt::Display for SmartDiagnosticsConfig {
@@ -297,7 +299,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
 
     // set the interface name in for the collector
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
-    validated_ethernet_settings.adapter_name = kcf.collector_ethernet;
+    validated_ethernet_settings.adapter_name = kcf.collector_ethernet_interface;
 
     // wifi
     // TODO are these always correct in the ethernet enabled case.
@@ -410,7 +412,7 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
     }
 
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
-    let net_settings = match get_network_settings(&kcf.collector_ethernet) {
+    let net_settings = match get_network_settings(&kcf.collector_ethernet_interface) {
         Some(settings) => settings,
         None => {
             println!("No network settings returned");
