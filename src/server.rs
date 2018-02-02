@@ -131,15 +131,17 @@ pub fn start_server(
     network_tx: Sender<NetworkCommand>,
     exit_tx: Sender<ExitResult>,
     ui_directory: &PathBuf,
+    config_file_path: String,
+    auth_file_path: String,
 ) {
     let exit_tx_clone = exit_tx.clone();
 
      //TODO: Create a function, validate_cookie_key()
 
-    let mut cfg = match load_diagnostics_config_file(CFG_FILE) {
+    let mut cfg = match load_diagnostics_config_file(&config_file_path) {
         Ok(config) => config,
         Err(config) => {
-            println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
+            println!("Failed to read/parse configuration file -> {} !\n", config_file_path);
             panic!("{:?}", config);
         }
     };
@@ -160,13 +162,17 @@ pub fn start_server(
         cfg.cookie_key = new_key;
     }
 
+    let collector_ethernet_interface = cfg.collector_ethernet_interface.clone();
+    let collector_wifi_interface = cfg.collector_wifi_interface.clone();
     let kcf = KCFRuntimeData {
         http_server_address: gateway.to_string() + ":",
-        collector_ethernet_interface: cfg.collector_ethernet_interface.clone(),
-        collector_wifi_interface: cfg.collector_wifi_interface.clone(),
+        collector_ethernet_interface,
+        collector_wifi_interface,
+        config_file_path,
+        auth_file_path,
     };
 
-    let status = match write_diagnostics_config(&cfg) {
+    let status = match write_diagnostics_config(&cfg, &kcf.config_file_path) {
         Ok(s) => s,
         Err(err) => panic!("{:?}", err)
     };

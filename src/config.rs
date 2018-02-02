@@ -25,6 +25,8 @@ pub struct Config {
 
     //kcf section
     pub hotspot_interface: String, // interface to run the wlan hotspot on.
+    pub config_file_path: String,
+    pub auth_file_path: String,
 }
 
 pub fn get_config() -> Config {
@@ -108,6 +110,22 @@ pub fn get_config() -> Config {
                 .help("Wifi device used to run the hotspot (e.g wlan1)")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("config-file")
+                .short("f")
+                .long("config-file")
+                .value_name("config_file_path")
+                .help("The full path of the file to load configuration data.")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("auth-file")
+                .short("z")
+                .long("auth-file")
+                .value_name("auth_file_path")
+                .help("The full path of the file to load authorizations for server access.")
+                .takes_value(true),
+        )
         .get_matches();
 
     let interface: Option<String> = matches.value_of("portal-interface").map_or_else(
@@ -145,6 +163,15 @@ pub fn get_config() -> Config {
         || env::var("HOTSPOT_INTERFACE").unwrap_or_else(|_| DEFAULT_HOTSPOT_INTERFACE.to_string()),
         String::from,
     );
+    let config_file_path = matches.value_of("config-file").map_or_else(
+        || env::var("CONFIG_FILE").unwrap_or_else(|_| DEFAULT_CONFIG_FILE_PATH.to_string()),
+        String::from,
+    );
+    let auth_file_path = matches.value_of("auth-file").map_or_else(
+        || env::var("AUTH_FILE").unwrap_or_else(|_| DEFAULT_AUTH_FILE_PATH.to_string()),
+        String::from,
+    );
+
 
     let ui_directory = get_ui_directory(matches.value_of("ui-directory"));
 
@@ -157,6 +184,8 @@ pub fn get_config() -> Config {
         activity_timeout,
         ui_directory,
         hotspot_interface,
+        config_file_path,
+        auth_file_path,
     }
 }
 

@@ -31,7 +31,7 @@ defaults: &defaults
 
     - run: mkdir -p pack /tmp/dist
     - run: mv target/$TARGET/release/$BINARY pack/$BINARY
-    - run: cp -R public pack/public
+    - run: cp -R ui pack/ui
     - run: tar -czvf $ARCHIVE_PATH -C pack .
     - run: rm -rdf pack
 
@@ -67,6 +67,15 @@ jobs:
     environment:
       TARGET: x86_64-unknown-linux-gnu
 
+  test:
+    docker:
+      - image: majorz/rust-test-deploy:rust-nightly-2018-01-08
+    steps:
+      - checkout
+
+      - run: cargo fmt -- --write-mode=diff
+      - run: cargo clippy -- -D warnings
+
   deploy:
     docker:
       - image: majorz/x86_64-unknown-linux-gnu
@@ -85,31 +94,47 @@ workflows:
   version: 2
   build:
     jobs:
+      - test:
+          filters:
+            branches:
+              only: /.*/
+            tags:
+              only: /.*/
       - aarch64:
+          requires:
+            - test
           filters:
             branches:
               only: /.*/
             tags:
               only: /.*/
       - rpi:
+          requires:
+            - test
           filters:
             branches:
               only: /.*/
             tags:
               only: /.*/
       - armv7hf:
+          requires:
+            - test
           filters:
             branches:
               only: /.*/
             tags:
               only: /.*/
       - i386:
+          requires:
+            - test
           filters:
             branches:
               only: /.*/
             tags:
               only: /.*/
       - amd64:
+          requires:
+            - test
           filters:
             branches:
               only: /.*/

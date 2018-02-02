@@ -32,14 +32,10 @@ pub const CONFIG_TEMPLATE_NAME: &str = "config";
 pub const STATUS_TEMPLATE_NAME: &str = "status";
 //pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
 
-//Files we read for configuration
-pub const AUTH_FILE: &str = "auth.json";
-pub const CFG_FILE: &str = "cfg.json";
-
-//interface settings
-pub const DEFAULT_COLLECTOR_ETHERNET_INTERFACE: &str = "eth0";
-pub const DEFAULT_COLLECTOR_WIFI_INTERFACE: &str = "wlan0";
+//defaults for config not given on the commandline
 pub const DEFAULT_HOTSPOT_INTERFACE: &str = "wlan0";
+pub const DEFAULT_CONFIG_FILE_PATH: &str = "./cfg.json";
+pub const DEFAULT_AUTH_FILE_PATH: &str = "./auth.json";
 
 // parsing of sd collector xml tags.
 pub const PROMETHEUS_TAG_START: &str = "<PrometheusUrl>";
@@ -141,7 +137,7 @@ pub struct SDCollectoProxySettings {
     pub Password: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, PartialOrd)]
 pub struct Auth {
     pub username: String,
     pub password: String,
@@ -152,6 +148,8 @@ pub struct KCFRuntimeData {
     pub http_server_address: String,
     pub collector_ethernet_interface: String, 
     pub collector_wifi_interface: String, 
+    pub config_file_path: String,
+    pub auth_file_path: String,
 }
 
 impl fmt::Display for SmartDiagnosticsConfig {
@@ -270,10 +268,13 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         Err(e) => return Err(e),
     };
 
+    // set the interface name in for the collector
+    let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
+
     //
     // FIXME: Take a mutex.
     //
-    let mut cfg = match load_diagnostics_config_file(CFG_FILE) {
+    let mut cfg = match load_diagnostics_config_file(&kcf.config_file_path) {
         Ok(cfg) => cfg,
         Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
@@ -297,8 +298,6 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
 
-    // set the interface name in for the collector
-    let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
     validated_ethernet_settings.adapter_name = kcf.collector_ethernet_interface;
 
     // wifi
@@ -358,8 +357,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     //
     // Write out the cfg file for the next server change.
     //
-    
-    let status = match write_diagnostics_config(&cfg) {
+    let status = match write_diagnostics_config(&cfg, &kcf.config_file_path) {
         Ok(s) => s,
         Err(err) => { 
             return Err(IronError::new(err, status::InternalServerError));
@@ -396,22 +394,19 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
 
     let c = Cookie::parse(&cookie_str[cookie_prefix_len..]).unwrap();
 
+    let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
+
     // mutating this later, not saving it though
-    let mut cfg = match load_diagnostics_config_file(CFG_FILE) {
+    let mut cfg = match load_diagnostics_config_file(&kcf.config_file_path) {
         Ok(cfg) => cfg,
-        Err(err) => {
-            return Err(IronError::new(err, status::InternalServerError));
-        }
+        Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
 
     match validate_cookie(cfg.cookie_key.as_bytes(), &c) {
         true => (),
-        false => {
-            return Ok(Response::with((status::Unauthorized, "Invalid login.  Make sure you are authenticated to use this site.")))
-        }
+        false => return Ok(Response::with((status::Unauthorized, "Invalid login.  Make sure you are authenticated to use this site."))),
     }
 
-    let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
     let net_settings = match get_network_settings(&kcf.collector_ethernet_interface) {
         Some(settings) => settings,
         None => {
@@ -449,25 +444,18 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
         Err(e) => return Err(e),
     };
 
-    let creds = load_auth_file(AUTH_FILE).expect("Failed to load auth file");
+    let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
+    let creds = load_auth_file(&kcf.auth_file_path).expect("Failed to load auth file");
 
-    // can you compare entire structs?
-
-    let auth_ok = if http_post_auth.username == creds.username && http_post_auth.password == creds.password 
-        { true } 
-    else
-        { false };
-
+    // diff auth file creds with those passed via http post.
+    let auth_ok = http_post_auth == creds;
+       
     // the http server address is stored in the config file right now.
-    let cfg = match load_diagnostics_config_file(CFG_FILE) {
+    let cfg = match load_diagnostics_config_file(&kcf.config_file_path) {
         Ok(config) => config,
-        Err(config) => {
-            println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
-            panic!("{:?}", config);
-        }
+        Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
 
-    let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
     let get_config_route = "http://".to_string() + &kcf.http_server_address + ROUTE_GET_CONFIG;
 
     let url = Url::parse(&get_config_route).unwrap();
@@ -488,11 +476,12 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
 
 pub fn get_status(req: &mut Request) -> IronResult<Response> {
 
+    let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
     // create a live serde cfg object with all the status info
-    let cfg = match load_diagnostics_config_file(CFG_FILE) {
+    let cfg = match load_diagnostics_config_file(&kcf.config_file_path) {
         Ok(config) => config,
         Err(config) => {
-            println!("Failed to read/parse configuration file -> {} !\n", CFG_FILE);
+            println!("Failed to read/parse configuration file -> {} !\n", kcf.config_file_path);
             panic!("{:?}", config);
         }
     };
@@ -590,8 +579,8 @@ pub fn write_file_contents(data: &str, file_path: &str) -> io::Result<()> {
     Ok(())
 }
 
-pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig) -> io::Result<()> {
-    let mut f = OpenOptions::new().write(true).truncate(true).open(CFG_FILE)?;
+pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig, file_path: &str) -> io::Result<()> {
+    let mut f = OpenOptions::new().write(true).truncate(true).open(file_path)?;
     let data = match serde_json::to_string(&config) {
         Ok(computer) => computer,
         Err(e) => return Err(io::Error::new(InvalidData, e)),
@@ -731,8 +720,9 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
         output_config_data.push_str("iface default inet dhcp\n\n");
 
         // disable ethernet here
-        output_config_data.push_str(&format!("auto {}\n", ethernet_settings.adapter_name));
-        output_config_data.push_str(&format!("iface {} down\n\n", ethernet_settings.adapter_name));
+        // Note: If eth0 is mentioned currently it breaks wifi on the rpi3, for some mysterious reason.
+        //output_config_data.push_str(&format!("auto {}\n", ethernet_settings.adapter_name));
+        //output_config_data.push_str(&format!("iface {} down\n\n", ethernet_settings.adapter_name));
 
     } else if ethernet_settings.dhcp_enabled {
 
@@ -741,8 +731,8 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
         output_config_data.push_str(&format!("iface {} inet dhcp\n\n", ethernet_settings.adapter_name));
 
         // disable wifi here
-        output_config_data.push_str(&format!("auto {}\n", wifi_settings.adapter_name));
-        output_config_data.push_str(&format!("iface {} down\n\n", wifi_settings.adapter_name));
+        //output_config_data.push_str(&format!("auto {}\n", wifi_settings.adapter_name));
+        //output_config_data.push_str(&format!("iface {} down\n\n", wifi_settings.adapter_name));
 
     } else {
 

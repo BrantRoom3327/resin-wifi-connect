@@ -109,6 +109,8 @@ impl NetworkCommandHandler {
         let gateway = config.gateway;
         let exit_tx_server = exit_tx.clone();
         let ui_directory = config.ui_directory.clone();
+        let config_file_path = config.config_file_path.clone();
+        let auth_file_path = config.auth_file_path.clone();
 
         thread::spawn(move || {
             start_server(
@@ -117,6 +119,8 @@ impl NetworkCommandHandler {
                 network_tx,
                 exit_tx_server,
                 &ui_directory,
+                config_file_path,
+                auth_file_path,
             );
         });
     }
