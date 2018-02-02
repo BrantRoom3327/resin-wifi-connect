@@ -78,7 +78,7 @@ pub struct NetworkSettings {
     pub dns: Vec<Ipv4Addr>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SmartDiagnosticsConfig {
     // cloud storage settings
     pub cloud_storage_enabled: bool,
@@ -137,7 +137,7 @@ pub struct SDCollectoProxySettings {
     pub Password: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Debug, Clone)]
 pub struct Auth {
     pub username: String,
     pub password: String,
@@ -146,10 +146,12 @@ pub struct Auth {
 #[derive(Debug, Clone)]
 pub struct KCFRuntimeData {
     pub http_server_address: String,
-    pub collector_ethernet_interface: String, 
-    pub collector_wifi_interface: String, 
-    pub config_file_path: String,
+    //config
+    pub config_file_path: String, 
+    pub config_data: SmartDiagnosticsConfig,
+    //auth
     pub auth_file_path: String,
+    pub auth_data: Auth,
 }
 
 impl fmt::Display for SmartDiagnosticsConfig {
@@ -271,13 +273,9 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     // set the interface name in for the collector
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
 
-    //
-    // FIXME: Take a mutex.
-    //
-    let mut cfg = match load_diagnostics_config_file(&kcf.config_file_path) {
-        Ok(cfg) => cfg,
-        Err(err) => return Err(IronError::new(err, status::InternalServerError)),
-    };
+    //create a mutable instance of config data, we will edit it and write it to the original file
+    //location from startup.
+    let mut config_data = kcf.config_data.clone();
 
     // make sure the network configuration type gets validated here and type converted
     let network_configuration_type = match get_network_cfg_type(options.network_configuration_type) {
@@ -298,9 +296,8 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
 
-    validated_ethernet_settings.adapter_name = kcf.collector_ethernet_interface;
+    validated_ethernet_settings.adapter_name = config_data.collector_ethernet_interface.clone();
 
-    // wifi
     // TODO are these always correct in the ethernet enabled case.
     let wifi_settings = NetworkSettings {
         adapter_name: "wlan0".to_string(),
@@ -312,7 +309,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     };
 
     // setup ethernet adapter with new settings in config file.
-    let network_configured = match configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, &cfg.network_cfg_file) {
+    let network_configured = match configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, &kcf.config_file_path) {
         Ok(settings) => settings,
         Err(e) => {
             println!("Unable to set network configuration");
@@ -325,39 +322,39 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     //
 
     if options.cloud_storage_enabled {
-        cfg.data_destination_url = options.destination_address;
+        config_data.data_destination_url = options.destination_address;
     }
 
     if options.proxy_enabled {
-        cfg.proxy_login = options.proxy_login;
-        cfg.proxy_password = options.proxy_password;
-        cfg.proxy_gateway = options.proxy_gateway;
-        cfg.proxy_gateway_port = options.proxy_gateway_port;
+        config_data.proxy_login = options.proxy_login;
+        config_data.proxy_password = options.proxy_password;
+        config_data.proxy_gateway = options.proxy_gateway;
+        config_data.proxy_gateway_port = options.proxy_gateway_port;
     }
 
     // if we get this far, update the configuration, it was successful.
-    cfg.proxy_enabled = options.proxy_enabled;
-    cfg.cloud_storage_enabled = options.cloud_storage_enabled;
-    cfg.network_configuration_type = options.network_configuration_type;
+    config_data.proxy_enabled = options.proxy_enabled;
+    config_data.cloud_storage_enabled = options.cloud_storage_enabled;
+    config_data.network_configuration_type = options.network_configuration_type;
 
     // static settings
-    cfg.ethernet_ip_address = options.ethernet_ip_address;
-    cfg.ethernet_subnet_mask = options.ethernet_subnet_mask;
-    cfg.ethernet_gateway = options.ethernet_gateway;
-    cfg.ethernet_dns = [].to_vec();
+    config_data.ethernet_ip_address = options.ethernet_ip_address;
+    config_data.ethernet_subnet_mask = options.ethernet_subnet_mask;
+    config_data.ethernet_gateway = options.ethernet_gateway;
+    config_data.ethernet_dns = [].to_vec();
     for ns in validated_ethernet_settings.dns {
-        cfg.ethernet_dns.push(ns.to_string());
+        config_data.ethernet_dns.push(ns.to_string());
     }
 
     //
     // Update the sd collecto xml file
     //
-    update_sd_collector_xml(&cfg);
+    update_sd_collector_xml(&config_data);
 
     //
-    // Write out the cfg file for the next server change.
+    // Write out the config_data file for the next server change.
     //
-    let status = match write_diagnostics_config(&cfg, &kcf.config_file_path) {
+    let status = match write_diagnostics_config(&config_data, &kcf.config_file_path) {
         Ok(s) => s,
         Err(err) => { 
             return Err(IronError::new(err, status::InternalServerError));
@@ -397,17 +394,14 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
 
     // mutating this later, not saving it though
-    let mut cfg = match load_diagnostics_config_file(&kcf.config_file_path) {
-        Ok(cfg) => cfg,
-        Err(err) => return Err(IronError::new(err, status::InternalServerError)),
-    };
+    let mut cfg = kcf.config_data.clone();
 
     match validate_cookie(cfg.cookie_key.as_bytes(), &c) {
         true => (),
         false => return Ok(Response::with((status::Unauthorized, "Invalid login.  Make sure you are authenticated to use this site."))),
     }
 
-    let net_settings = match get_network_settings(&kcf.collector_ethernet_interface) {
+    let net_settings = match get_network_settings(&kcf.config_data.collector_ethernet_interface) {
         Some(settings) => settings,
         None => {
             println!("No network settings returned");
@@ -445,16 +439,9 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
     };
 
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
-    let creds = load_auth_file(&kcf.auth_file_path).expect("Failed to load auth file");
 
-    // diff auth file creds with those passed via http post.
-    let auth_ok = http_post_auth == creds;
-       
-    // the http server address is stored in the config file right now.
-    let cfg = match load_diagnostics_config_file(&kcf.config_file_path) {
-        Ok(config) => config,
-        Err(err) => return Err(IronError::new(err, status::InternalServerError)),
-    };
+    // diff auth file creds with those passed via http post. Comparing two of 'struct Auth'
+    let auth_ok = http_post_auth == kcf.auth_data;
 
     let get_config_route = "http://".to_string() + &kcf.http_server_address + ROUTE_GET_CONFIG;
 
@@ -462,14 +449,12 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
 
     let mut resp = match auth_ok {
         true => Response::with((status::Found, Redirect(url.clone()))),
-        false => Response::with((status::Unauthorized, "Bad login"))
+        false => return Ok(Response::with((status::Unauthorized, "Bad login"))),
     };
 
-    if auth_ok {
-        let cookie_str = create_cookie(cfg.cookie_key.as_bytes());
-        resp.headers.append_raw("Set-Cookie", cookie_str.into_bytes());
-    }
-
+    //success auth at this point
+    let cookie_str = create_cookie(kcf.config_data.cookie_key.as_bytes());
+    resp.headers.append_raw("Set-Cookie", cookie_str.into_bytes());
     //println!("server response:\n{:?}", resp);
     Ok(resp)
 }
@@ -477,17 +462,8 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
 pub fn get_status(req: &mut Request) -> IronResult<Response> {
 
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
-    // create a live serde cfg object with all the status info
-    let cfg = match load_diagnostics_config_file(&kcf.config_file_path) {
-        Ok(config) => config,
-        Err(config) => {
-            println!("Failed to read/parse configuration file -> {} !\n", kcf.config_file_path);
-            panic!("{:?}", config);
-        }
-    };
-
     let mut resp = Response::new();
-    resp.set_mut(Template::new(STATUS_TEMPLATE_NAME, cfg)).set_mut(status::Ok);
+    resp.set_mut(Template::new(STATUS_TEMPLATE_NAME, kcf.config_data)).set_mut(status::Ok);
     Ok(resp)
 }
 
@@ -677,29 +653,23 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
 
 // configure all the network settings in one go.
 // wifi and ethernet.
-fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_settings: &NetworkSettings, file_path: &str) 
+fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_settings: &NetworkSettings, config_file_path: &str) 
     -> Result<(), io::Error>
 {
-    let input_config_data = match load_file_as_string(file_path) {
-        Ok(data) => data,
-         Err(e) => {
-            println!("Could not load config file {}", file_path);
-            return Err(Error::new(ErrorKind::Other, "configure_system_network_settings(): could not load the file!"));
-         }
-    };
-
     let mut output_config_data = String::new();
 
+    /*
     //keep everything with a #comment line and write it to the output.
-    for line in input_config_data.lines() {
-        let offset = line.find("#").unwrap_or(input_config_data.len());
+    for line in config_data.lines() {
+        let offset = line.find("#").unwrap_or(config_data.len());
         if offset == 0 { //starts with a #comment
             let saved_line = line.to_string() + "\n";
             output_config_data.push_str(&saved_line);
         }
-    }
+    }*/
 
     // loopback
+    output_config_data.push_str("source-directory /etc/init.d/interfaces");
     output_config_data.push_str("\nauto lo\n");
     output_config_data.push_str("iface lo inet loopback\n\n");
 
@@ -763,10 +733,10 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
 
     println!("Config we would write\n{}", output_config_data);
 
-    let wrote_file = match write_file_contents(&output_config_data, file_path) {
+    let wrote_file = match write_file_contents(&output_config_data, config_file_path) {
         Ok(wrote) => wrote,
         Err(e) => {
-            println!("Failed to write network configuration file {} err -> {:?}\n", file_path, e);
+            println!("Failed to write network configuration file {} err -> {:?}\n", config_file_path, e);
             return Err(e);
         }
     };

@@ -136,19 +136,25 @@ pub fn start_server(
 ) {
     let exit_tx_clone = exit_tx.clone();
 
-     //TODO: Create a function, validate_cookie_key()
+    //TODO: Create a function, validate_cookie_key()
 
-    let mut cfg = match load_diagnostics_config_file(&config_file_path) {
+    //
+    // deserialize SmartDiagnosticsConfig and Auth directly into KCFRunTimeData. 
+    // use this at runtime to inject configuration state into templates and processing.
+    //
+    let mut config_data = match load_diagnostics_config_file(&config_file_path) {
         Ok(config) => config,
-        Err(config) => {
-            println!("Failed to read/parse configuration file -> {} !\n", config_file_path);
-            panic!("{:?}", config);
-        }
+        Err(config) => panic!("Failed to read configuration file -> {} !\n", config_file_path),
+    };
+    
+    let mut auth_data = match load_auth_file(&auth_file_path) {
+        Ok(c) => c,
+        Err(e) => panic!("Failed to read auth file -> {} !\n", e),
     };
 
     // make sure we have a valid cookie seed value.  Needs to be 256 bits.
     // Since its stored as a string we convert 2 chars per string to our 32 bytes of data.
-    if cfg.cookie_key.len() != 64 { // 32 bytes of data.  2 chars per byte in hex.
+    if config_data.cookie_key.len() != 64 { // 32 bytes of data.  2 chars per byte in hex.
         println!("Generating a new cookie creator master key..");
         let mut rng = thread_rng();
         let mut array = vec![0; 8];
@@ -159,37 +165,28 @@ pub fn start_server(
             array[0], array[1], array[2], array[3], array[4], array[5], array[6], array[7]);
 
         println!("New Key -> {} len {}", new_key, new_key.len());
-        cfg.cookie_key = new_key;
+        config_data.cookie_key = new_key;
     }
 
-    let collector_ethernet_interface = cfg.collector_ethernet_interface.clone();
-    let collector_wifi_interface = cfg.collector_wifi_interface.clone();
-    let kcf = KCFRuntimeData {
-        http_server_address: gateway.to_string() + ":",
-        collector_ethernet_interface,
-        collector_wifi_interface,
-        config_file_path,
-        auth_file_path,
-    };
-
-    let status = match write_diagnostics_config(&cfg, &kcf.config_file_path) {
-        Ok(s) => s,
-        Err(err) => panic!("{:?}", err)
-    };
-
-    let mut request_state = RequestSharedState {
-        gateway,
-        server_rx,
-        network_tx,
-        exit_tx,
-        kcf, //kcf specific
-    };
-
+    let mut http_server_address = String::new();
     if cfg!(feature = "no_hotspot") {
-        request_state.kcf.http_server_address += &NO_HOTSPOT_SERVER_PORT.to_string()
+        http_server_address = gateway.to_string() + ":" + &NO_HOTSPOT_SERVER_PORT.to_string()
     } else {
-        request_state.kcf.http_server_address += "80"
+        http_server_address = gateway.to_string() + ":80";
     }
+
+    let http_server_address_clone = http_server_address.clone();
+    let kcf = KCFRuntimeData {
+        http_server_address,
+        config_file_path,
+        config_data,
+        auth_file_path,
+        auth_data,
+    };
+
+    let request_state = RequestSharedState { 
+        gateway, server_rx, network_tx, exit_tx, kcf
+    };
 
     let mut router = Router::new();
     router.get("/", Static::new(ui_directory), "index");
@@ -216,18 +213,17 @@ pub fn start_server(
         panic!("{}", r);
     }
 
-    let server_address_clone = request_state.kcf.http_server_address.clone();
-    info!("Starting HTTP server on http://{}", server_address_clone);
+    info!("Starting HTTP server on http://{}", http_server_address_clone);
 
     let mut chain = Chain::new(assets);
     chain.link(Write::<RequestSharedState>::both(request_state));
     chain.link_after(RedirectMiddleware);
     chain.link_after(hbse);
 
-    if let Err(e) = Iron::new(chain).http(&server_address_clone) {
+    if let Err(e) = Iron::new(chain).http(&http_server_address_clone) {
         exit(
             &exit_tx_clone,
-            format!("Cannot start HTTP server on '{}': {}", &server_address_clone, e.description()),
+            format!("Cannot start HTTP server on '{}': {}", &http_server_address_clone, e.description()),
         );
     }
 }
