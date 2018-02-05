@@ -18,6 +18,7 @@ use hbs::Template;
 use std::io::ErrorKind::InvalidData;
 use server::{collect_set_config_options, collect_do_auth_options, get_kcf_runtime_data};
 use num::FromPrimitive;
+use handlebars::Handlebars;
 
 #[cfg(target_os = "linux")]
 use linux::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
@@ -28,8 +29,9 @@ use macos::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
 // this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are stripped for runtime
 pub const NO_HOTSPOT_SERVER_PORT: i32 = 8080;
 pub const TEMPLATE_DIR: &str = "/templates/";
-pub const CONFIG_TEMPLATE_NAME: &str = "config";
-pub const STATUS_TEMPLATE_NAME: &str = "status";
+pub const CONFIG_TEMPLATE: &str = "config";
+pub const STATUS_TEMPLATE: &str = "status";
+pub const WRITE_ETHERNET_SETTINGS_TEMPLATE: &str = "ethernet-network-config";
 
 //defaults for config not given on the commandline
 pub const DEFAULT_HOTSPOT_INTERFACE: &str = "wlan0";
@@ -74,6 +76,25 @@ pub struct NetworkSettings {
     pub netmask: Ipv4Addr,
     pub gateway: Ipv4Addr,
     pub dns: Vec<Ipv4Addr>,
+}
+
+impl NetworkSettings {
+    pub fn to_json(&self) -> String {
+        let j = json!({
+        "adapter_name": self.adapter_name,
+        "dhcp_enabled": self.dhcp_enabled.to_string(),
+        "ip_address": self.ip_address.to_string(),
+        "netmask": self.netmask.to_string(),
+        "gateway": self.gateway.to_string(),
+        "dns": "",
+        });
+
+ //   for entry in ethernet_settings.dns {
+ //       cfg.ethernet_dns.push(entry.to_string());
+ //   }
+
+        format!("{}", j)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -223,7 +244,6 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::
     let proxy_settings_start = match find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_START) {
         Some(start) => start + PROXYSETTINGS_TAG_START.to_string().len(),
         None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROXYSETTINGS_TAG_START.to_string(), cfg.collector_cfg_file))),
-        //None => return,
     };
 
     let proxy_settings_end = match find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_END) {
@@ -416,7 +436,7 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
     }
 
     let mut resp = Response::new();
-    resp.set_mut(Template::new(CONFIG_TEMPLATE_NAME, cfg)).set_mut(status::Ok);
+    resp.set_mut(Template::new(CONFIG_TEMPLATE, cfg)).set_mut(status::Ok);
     Ok(resp)
 }
 
@@ -452,7 +472,7 @@ pub fn get_status(req: &mut Request) -> IronResult<Response> {
 
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
     let mut resp = Response::new();
-    resp.set_mut(Template::new(STATUS_TEMPLATE_NAME, kcf.config_data)).set_mut(status::Ok);
+    resp.set_mut(Template::new(STATUS_TEMPLATE, kcf.config_data)).set_mut(status::Ok);
     Ok(resp)
 }
 
@@ -641,90 +661,32 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
 fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_settings: &NetworkSettings, config_file_path: &str) 
     -> Result<(), io::Error>
 {
-    return Ok(())
-    /*
-    let mut output_config_data = String::new();
-
-    for line in config_data.lines() {
-        let offset = line.find("#").unwrap_or(config_data.len());
-        if offset == 0 { //starts with a #comment
-            let saved_line = line.to_string() + "\n";
-            output_config_data.push_str(&saved_line);
-        }
-    }
-
-    // loopback
-    output_config_data.push_str("source-directory /etc/init.d/interfaces");
-    output_config_data.push_str("\nauto lo\n");
-    output_config_data.push_str("iface lo inet loopback\n\n");
-
-    // order of configuraton
-    // if wifi_settings.dhcp_enabled is on, enable wifi on wlan adapter interface
-    // disable the ethernet adapter (shouldn't be used for sd collector)
-    // else if eithernet dhcp is on, don't use wifi
-    // else ethernet static settings should be applied, and also don't use wifi
-
-    // Consider turning the strings into packages to drop into the format! macro
-
-    if wifi_settings.dhcp_enabled {
-        // enable dhcp for wifi adapter
-        output_config_data.push_str(&format!("auto {}\n", wifi_settings.adapter_name));
-        output_config_data.push_str(&format!("allow-hotplpug {}\n", wifi_settings.adapter_name));
-        output_config_data.push_str(&format!("iface {} inet dhcp\n", wifi_settings.adapter_name));
-        output_config_data.push_str("wpa-conf /etc/wpa_supplicant/wpa_suppplicant.conf\n");
-        output_config_data.push_str("iface default inet dhcp\n\n");
-
-        // disable ethernet here
-        // Note: If eth0 is mentioned currently it breaks wifi on the rpi3, for some mysterious reason.
-        //output_config_data.push_str(&format!("auto {}\n", ethernet_settings.adapter_name));
-        //output_config_data.push_str(&format!("iface {} down\n\n", ethernet_settings.adapter_name));
-
-    } else if ethernet_settings.dhcp_enabled {
-
-        //enable dhcp for ethernet adapter
-        output_config_data.push_str(&format!("auto {}\n", ethernet_settings.adapter_name));
-        output_config_data.push_str(&format!("iface {} inet dhcp\n\n", ethernet_settings.adapter_name));
-
-        // disable wifi here
-        //output_config_data.push_str(&format!("auto {}\n", wifi_settings.adapter_name));
-        //output_config_data.push_str(&format!("iface {} down\n\n", wifi_settings.adapter_name));
-
-    } else {
-
-        // enable static addressing for adapter
-        output_config_data.push_str(&format!("auto {}\n", ethernet_settings.adapter_name));
-        output_config_data.push_str(&format!("iface {} inet static\n", ethernet_settings.adapter_name));
-        output_config_data.push_str(&format!("address {}\n", ethernet_settings.ip_address.to_string()));
-        output_config_data.push_str(&format!("netmask {}\n", ethernet_settings.netmask.to_string()));
-        output_config_data.push_str(&format!("gateway {}\n", ethernet_settings.gateway.to_string()));
-
-        output_config_data.push_str("dns-nameservers "); 
-        let dns_len = ethernet_settings.dns.len();
-        let mut index = 0;
-        for _ns in &ethernet_settings.dns {
-            output_config_data.push_str(&format!("{}", ethernet_settings.gateway.to_string()));
-            if index != (dns_len - 1) {
-                // if we are not on the last entry add a ,
-                output_config_data.push_str(", ");
-            }
-            index = index+1;
-        }
-        output_config_data.push_str("\n\n");
-
-        //turn off wifi
-        output_config_data.push_str(&format!("auto {}\n", wifi_settings.adapter_name));
-        output_config_data.push_str(&format!("iface {} down\n\n", wifi_settings.adapter_name));
-    }
-
-    println!("Config we would write\n{}", output_config_data);
-
-    if write_file_contents(&output_config_data, config_file_path).is_ok() {
-        return Ok(())
-    } else {
-        return Err(Error::new(ErrorKind::Other, "configure_network_settings: couldn't write configuration to file!"));
+    let template_form = match load_file_as_string("./ui/templates/ethernet-network-config.hbs") {
+        Ok(t) => t,
+        Err(e) => {
+            println!("Couldnt find the file!");
+            return Err(io::Error::new(InvalidData, format!("Could not load -> file")))
+        },
     };
-    */
+
+    //let some_json = ethernet_settings.to_json();
+    //println!("Some json is {}", some_json);
+
+    // register the template. The template string will be verified and compiled.
+    let mut h = Handlebars::new();
+    let source = template_form;
+    assert!(h.register_template_string("t1", source).is_ok());
+
+    let t = h.render("t1", &ethernet_settings).unwrap();
+
+    if write_file_contents(&t.to_string(), "./resin-ethernet").is_err() {
+        println!("Failed to write junk");
+        return Err(io::Error::new(InvalidData, format!("Failed to write to junk.txt!")));
+    }
+    
+    return Ok(())
 }
+
 
 pub fn get_network_cfg_type(value: u8) -> Option<NetworkCfgType> {
      let network_configuration_type = match NetworkCfgType::from_u8(value) {
