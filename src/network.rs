@@ -4,9 +4,14 @@ use std::time::Duration;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::error::Error;
 use std::net::Ipv4Addr;
-use network_manager::{AccessPoint, Connection, Connectivity, Device, DeviceType, NetworkManager, ServiceState};
+
+#[cfg(not(feature = "no_hotspot"))]
+use network_manager::{AccessPoint, Connection, ConnectionState, Connectivity, Device, DeviceType,
+                      NetworkManager, ServiceState};
+
 use {exit, ExitResult};
 use config::Config;
+use dnsmasq::start_dnsmasq;
 use server::start_server;
 
 pub enum NetworkCommand {
@@ -34,17 +39,13 @@ struct NetworkCommandHandler {
 
 #[cfg(feature = "no_hotspot")]
 struct NetworkCommandHandler {
-    config: Config,
-    server_tx: Sender<NetworkCommandResponse>,
-    network_rx: Receiver<NetworkCommand>,
-    activated: bool,
 }
 
 impl NetworkCommandHandler {
-    // This is the standard ::new() for production
     #[cfg(not(feature = "no_hotspot"))]
     fn new(config: &Config, exit_tx: &Sender<ExitResult>) -> Result<Self, String> {
         let manager = NetworkManager::new();
+
         debug!("NetworkManager connection initialized");
 
         let device = find_device(&manager, &config.interface)?;
@@ -78,27 +79,15 @@ impl NetworkCommandHandler {
         })
     }
 
-    // this ::new() is used for local builds to just run the http server for configuration
-   #[cfg(feature = "no_hotspot")]
-   fn new(config: &Config, exit_tx: &Sender<ExitResult>) -> Result<Self, String> {
-        debug!("NetworkManager connection initialized");
-
-        let (server_tx, server_rx) = channel();
+    // non hotspot new
+    #[cfg(feature = "no_hotspot")]
+    fn new(config: &Config, exit_tx: &Sender<ExitResult>) -> Result<Self, String> {
+        let (_server_tx, server_rx) = channel();
         let (network_tx, network_rx) = channel();
-
         Self::spawn_server(config, exit_tx, server_rx, network_tx.clone());
-        Self::spawn_activity_timeout(config, network_tx.clone());
 
-        let config = config.clone();
-        let activated = true; //pretend we are already activated
-
-        Ok(NetworkCommandHandler {
-            config,
-            server_tx,
-            network_rx,
-            activated,
-        })
-    } 
+        Ok(NetworkCommandHandler{})
+    }
 
     fn spawn_server(
         config: &Config,
@@ -144,16 +133,14 @@ impl NetworkCommandHandler {
         });
     }
 
-    #[cfg(not(feature = "no_hotspot"))]
     fn run(&mut self, exit_tx: &Sender<ExitResult>) {
+        #[cfg(not(feature = "no_hotspot"))]
+        {
         let result = self.run_loop();
         self.stop(exit_tx, result);
+        }
     }
 
-    #[cfg(feature = "no_hotspot")]
-    fn run(&mut self, exit_tx: &Sender<ExitResult>) {
-    }
-    
     #[cfg(not(feature = "no_hotspot"))]
     fn run_loop(&mut self) -> ExitResult {
         loop {
@@ -178,6 +165,7 @@ impl NetworkCommandHandler {
         }
     }
 
+    #[cfg(not(feature = "no_hotspot"))]
     fn receive_network_command(&self) -> Result<NetworkCommand, String> {
         match self.network_rx.recv() {
             Ok(command) => Ok(command),
@@ -203,11 +191,6 @@ impl NetworkCommandHandler {
         let _ = exit_tx.send(result);
     }
 
-    #[cfg(feature = "no_hotspot")]
-    fn stop(&mut self, exit_tx: &Sender<ExitResult>, result: ExitResult) {
-        // no dns masq for no hotspot builds.
-    }
-
     #[cfg(not(feature = "no_hotspot"))]
     fn activate(&mut self) -> ExitResult {
         self.activated = true;
@@ -229,7 +212,6 @@ impl NetworkCommandHandler {
 
     #[cfg(not(feature = "no_hotspot"))]
     fn connect(&mut self, ssid: &str, passphrase: &str) -> Result<bool, String> {
-        println!("connect()\n");
         delete_connection_if_exists(&self.manager, ssid);
 
         if let Some(ref connection) = self.portal_connection {
@@ -298,8 +280,9 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
     command_handler.run(exit_tx);
 }
 
-#[cfg(not(feature = "no_hotspot"))]
 pub fn init_networking() {
+#[cfg(not(feature = "no_hotspot"))]
+{
     start_network_manager_service();
 
     if let Err(err) = delete_access_point_profiles() {
@@ -307,12 +290,9 @@ pub fn init_networking() {
         process::exit(1);
     }
 }
-
-#[cfg(feature = "no_hotspot")]
-pub fn init_networking() {
-    // no op for local no hotspot mode
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 pub fn find_device(manager: &NetworkManager, interface: &Option<String>) -> Result<Device, String> {
     if let Some(ref interface) = *interface {
         let device = manager.get_device_by_interface(interface)?;
@@ -339,10 +319,12 @@ pub fn find_device(manager: &NetworkManager, interface: &Option<String>) -> Resu
     }
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn get_access_points(device: &Device) -> Result<Vec<AccessPoint>, String> {
     get_access_points_impl(device).map_err(|e| format!("Getting access points failed: {}", e))
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn get_access_points_impl(device: &Device) -> Result<Vec<AccessPoint>, String> {
     let retries_allowed = 10;
     let mut retries = 0;
@@ -353,7 +335,6 @@ fn get_access_points_impl(device: &Device) -> Result<Vec<AccessPoint>, String> {
         let wifi_device = device.as_wifi_device().unwrap();
         let mut access_points = wifi_device.get_access_points()?;
 
-        println!("Get access points calling for ssid!\n\n");
         access_points.retain(|ap| ap.ssid().as_str().is_ok());
 
         if !access_points.is_empty() {
@@ -373,24 +354,24 @@ fn get_access_points_impl(device: &Device) -> Result<Vec<AccessPoint>, String> {
     Ok(vec![])
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn get_access_points_ssids(access_points: &[AccessPoint]) -> Vec<&str> {
-    println!("get_access_points_ssids");
     access_points
         .iter()
         .map(|ap| ap.ssid().as_str().unwrap())
         .collect()
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn get_access_points_ssids_owned(access_points: &[AccessPoint]) -> Vec<String> {
-    println!("get_access_points_ssids owned");
     access_points
         .iter()
         .map(|ap| ap.ssid().as_str().unwrap().to_string())
         .collect()
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn find_access_point<'a>(access_points: &'a [AccessPoint], ssid: &str) -> Option<&'a AccessPoint> {
-    println!("find access points!!\n\n");
     for access_point in access_points.iter() {
         if let Ok(access_point_ssid) = access_point.ssid().as_str() {
             if access_point_ssid == ssid {
@@ -402,6 +383,7 @@ fn find_access_point<'a>(access_points: &'a [AccessPoint], ssid: &str) -> Option
     None
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn create_portal(device: &Device, config: &Config) -> Result<Connection, String> {
     let portal_passphrase = config.passphrase.as_ref().map(|p| p as &str);
 
@@ -409,6 +391,7 @@ fn create_portal(device: &Device, config: &Config) -> Result<Connection, String>
         .map_err(|e| format!("Creating the captive portal failed: {}", e))
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn create_portal_impl(
     device: &Device,
     ssid: &str,
@@ -422,11 +405,13 @@ fn create_portal_impl(
     Ok(portal_connection)
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn stop_portal(connection: &Connection, config: &Config) -> Result<(), String> {
     stop_portal_impl(connection, config)
         .map_err(|e| format!("Stopping the access point failed: {}", e))
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn stop_portal_impl(connection: &Connection, config: &Config) -> Result<(), String> {
     info!("Stopping access point '{}'...", config.ssid);
     connection.deactivate()?;
@@ -436,6 +421,7 @@ fn stop_portal_impl(connection: &Connection, config: &Config) -> Result<(), Stri
     Ok(())
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn wait_for_connectivity(manager: &NetworkManager, timeout: u64) -> Result<bool, String> {
     let mut total_time = 0;
 
@@ -469,12 +455,11 @@ fn wait_for_connectivity(manager: &NetworkManager, timeout: u64) -> Result<bool,
     }
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 pub fn start_network_manager_service() {
-    println!("start_network_manager_service()\n");
     match NetworkManager::get_service_state() {
         Ok(state) => {
             if state != ServiceState::Active {
-                println!("ServiceState::Active, NetworkManager::start_service()");
                 match NetworkManager::start_service(15) {
                     Ok(state) => {
                         if state != ServiceState::Active {
@@ -506,6 +491,7 @@ pub fn start_network_manager_service() {
     }
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn delete_access_point_profiles() -> Result<(), String> {
     let manager = NetworkManager::new();
 
@@ -524,6 +510,7 @@ fn delete_access_point_profiles() -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_hotspot"))]
 fn delete_connection_if_exists(manager: &NetworkManager, ssid: &str) {
     let connections = match manager.get_connections() {
         Ok(connections) => connections,

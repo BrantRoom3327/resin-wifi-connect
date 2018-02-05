@@ -2,16 +2,19 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::error::Error;
 use std::fmt;
 use std::net::Ipv4Addr;
+
 use serde_json;
 use path::PathBuf;
 use iron::prelude::*;
-use iron::{headers, status, typemap, AfterMiddleware, Iron, IronError, IronResult, Request, Response, Url};
+use iron::{headers, status, typemap, AfterMiddleware, Iron, IronError, IronResult, Request,
+           Response, Url};
 use iron::modifiers::Redirect;
 use router::Router;
 use staticfile::Static;
 use mount::Mount;
 use persistent::Write;
 use params::{FromValue, Params};
+
 use network::{NetworkCommand, NetworkCommandResponse};
 use {exit, ExitResult};
 
@@ -20,8 +23,6 @@ use rand::*;
 use std::str;
 use kcf::*;
 use hbs::{HandlebarsEngine, DirectorySource};
-use std::io;
-use num::FromPrimitive;
 
 #[derive(Debug)]
 pub struct RequestSharedState {
@@ -144,10 +145,10 @@ pub fn start_server(
     //
     let mut config_data = match load_diagnostics_config_file(&config_file_path) {
         Ok(config) => config,
-        Err(config) => panic!("Failed to read configuration file -> {} !\n", config_file_path),
+        Err(e) => panic!("Failed to read configuration file -> {}! e={:?}\n", config_file_path, e),
     };
     
-    let mut auth_data = match load_auth_file(&auth_file_path) {
+    let auth_data = match load_auth_file(&auth_file_path) {
         Ok(c) => c,
         Err(e) => panic!("Failed to read auth file -> {} !\n", e),
     };
@@ -168,11 +169,11 @@ pub fn start_server(
         config_data.cookie_key = new_key;
     }
 
-    let mut http_server_address = String::new();
+    let mut http_server_address = gateway.to_string() + ":";
     if cfg!(feature = "no_hotspot") {
-        http_server_address = gateway.to_string() + ":" + &NO_HOTSPOT_SERVER_PORT.to_string()
+        http_server_address += &NO_HOTSPOT_SERVER_PORT.to_string()
     } else {
-        http_server_address = gateway.to_string() + ":80";
+        http_server_address += "80";
     }
 
     let http_server_address_clone = http_server_address.clone();
@@ -208,7 +209,7 @@ pub fn start_server(
 
     // handlebar style templates
     let mut hbse = HandlebarsEngine::new();
-    hbse.add(Box::new(DirectorySource::new(HTTP_PUBLIC, ".hbs")));
+    hbse.add(Box::new(DirectorySource::new(PathBuf::from(ui_directory), PathBuf::from(".hbs"))));
     if let Err(r) = hbse.reload() {
         panic!("{}", r);
     }

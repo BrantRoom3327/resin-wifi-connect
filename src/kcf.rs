@@ -1,11 +1,11 @@
+#![allow(non_camel_case_types)]
+
 use std::process::Command;
 use std::net::Ipv4Addr;
 use regex::Regex;
-use ExitResult;
 use std::str::FromStr;
 use iron::modifiers::Redirect;
-use std::sync::mpsc::Sender;
-use cookie::{CookieJar, Cookie, Key, SameSite};
+use cookie::{CookieJar, Cookie, SameSite};
 use iron::{Request, Response, IronResult, status, IronError, Url};
 use std::fs::OpenOptions;
 use std::io::{Write, Read, Error, ErrorKind};
@@ -27,7 +27,6 @@ use macos::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
 
 // this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are stripped for runtime
 pub const NO_HOTSPOT_SERVER_PORT: i32 = 8080;
-pub const HTTP_PUBLIC: &str = "./ui"; //FIXME: Follow the config param
 pub const CONFIG_TEMPLATE_NAME: &str = "config";
 pub const STATUS_TEMPLATE_NAME: &str = "status";
 //pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
@@ -42,7 +41,6 @@ pub const PROMETHEUS_TAG_START: &str = "<PrometheusUrl>";
 pub const PROMETHEUS_TAG_END: &str = "</PrometheusUrl>";
 pub const PROXYSETTINGS_TAG_START: &str = "<ProxySettings>";
 pub const PROXYSETTINGS_TAG_END: &str = "</ProxySettings>";
-pub const SETTINGS_TAG_START: &str = "<Settings>";
 
 // routes
 pub const ROUTE_GET_CONFIG: &str = "/getconfig";
@@ -53,7 +51,6 @@ pub const ROUTE_SHOW_STATUS: &str = "/status";
 // cookie for auth
 pub const COOKIE_NAME: &str = "tastybiscuits";
 pub const COOKIE_VALUE: &str = "lemonShortbread";
-pub const COOKIE_EXPIRES_HOURS: i32 = 1;
 
 enum_from_primitive! {
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -165,7 +162,7 @@ pub fn create_cookie(cookie_key: &[u8]) -> String {
     if cookie_key.len() != 64 {
         panic!("create_cookie: The cookie master key is invalid at runtime!  This shouldn't happen!\n\n");
     }
-    let key = Key::from_master(cookie_key);
+    //let key = Key::from_master(cookie_key);
     let mut jar = CookieJar::new();
 
     //setup the actual cookie
@@ -204,7 +201,7 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::
 
     let mut xml_data = match load_file_as_string(&cfg.collector_cfg_file) {
         Ok(xml) => xml,
-        Err(e) => return Err(io::Error::new(InvalidData, format!("Could not load -> {}", cfg.collector_cfg_file))),
+        Err(e) => return Err(io::Error::new(InvalidData, format!("Could not load -> {} e={:?}", cfg.collector_cfg_file, e))),
     };
 
     let prometheus_start = match find_offset_in_string(&xml_data, PROMETHEUS_TAG_START) {
@@ -217,7 +214,7 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::
         None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROMETHEUS_TAG_END.to_string(), cfg.collector_cfg_file))),
     };
 
-    let drained_of_prometheus: String = xml_data.drain(prometheus_start..prometheus_end).collect();
+    let _ : String = xml_data.drain(prometheus_start..prometheus_end).collect(); //drain bytes
     
     //now inject the data after the start tag.
     xml_data.insert_str(prometheus_start, &cfg.data_destination_url);
@@ -233,10 +230,10 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::
         None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROXYSETTINGS_TAG_END.to_string(), cfg.collector_cfg_file))),
     };
 
-    let drained_of_settings: String = xml_data.drain(proxy_settings_start..proxy_settings_end).collect();
+    let _drained_of_settings: String = xml_data.drain(proxy_settings_start..proxy_settings_end).collect();
 
     // now inject the data, starting at the end of the start tag
-    let mut collector_settings = SDCollectoProxySettings {
+    let collector_settings = SDCollectoProxySettings {
         Enabled: cfg.proxy_enabled,
         Server: cfg.proxy_gateway.clone(),
         Port: cfg.proxy_gateway_port,
@@ -247,15 +244,14 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::
     
     let collector_string = match serde_json::to_string(&collector_settings) {
         Ok(json) => json,
-        Err(err) => panic!("Serialization didn't happen for collector settings!"),
+        Err(e) => return Err(io::Error::new(InvalidData, format!("Failed to serialize data to xml! file {} err {}", cfg.collector_cfg_file, e))),
     };
 
     xml_data.insert_str(proxy_settings_start, &collector_string);
 
-    let file_ok = match write_file_contents(&xml_data, &cfg.collector_cfg_file) {
-        Ok(yay) => yay,
-        Err(e) => return Err(io::Error::new(InvalidData, format!("Failed to write to {} err {:?}", cfg.collector_cfg_file, e))),
-    };
+    if write_file_contents(&xml_data, &cfg.collector_cfg_file).is_err() {
+        return Err(io::Error::new(InvalidData, format!("Failed to write to {}!", cfg.collector_cfg_file)));
+    }
 
     Ok(())
 }
@@ -270,7 +266,6 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         Err(e) => return Err(e),
     };
 
-    // set the interface name in for the collector
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
 
     //create a mutable instance of config data, we will edit it and write it to the original file
@@ -280,9 +275,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     // make sure the network configuration type gets validated here and type converted
     let network_configuration_type = match get_network_cfg_type(options.network_configuration_type) {
         Some(net) => net,
-        None => {
-            return Err(IronError::new(io::Error::new(InvalidData, format!("Invalid network configuration value")), status::InternalServerError));
-        }
+        None =>return Err(IronError::new(io::Error::new(InvalidData, format!("Invalid network configuration value")), status::InternalServerError)),
     };
 
     let mut validated_ethernet_settings = match validate_network_settings(
@@ -309,13 +302,9 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     };
 
     // setup ethernet adapter with new settings in config file.
-    let network_configured = match configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, &kcf.config_file_path) {
-        Ok(settings) => settings,
-        Err(e) => {
-            println!("Unable to set network configuration");
-            return Err(IronError::new(e, status::InternalServerError));
-        }
-    };
+    if configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, &kcf.config_file_path).is_err() {
+        return Err(IronError::new(io::Error::new(InvalidData, format!("Couldn't configure network settings!")), status::InternalServerError));
+    }
 
     //
     // update all the configuration data and write it all out
@@ -347,18 +336,18 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     }
 
     //
-    // Update the sd collecto xml file
+    // Update the sd collector xml file
     //
-    update_sd_collector_xml(&config_data);
+    if update_sd_collector_xml(&config_data).is_err() {
+        return Err(IronError::new(io::Error::new(InvalidData, format!("Unable to update collector XML file!")), status::InternalServerError));
+    }
 
     //
     // Write out the config_data file for the next server change.
     //
-    let status = match write_diagnostics_config(&config_data, &kcf.config_file_path) {
+    let _status = match write_diagnostics_config(&config_data, &kcf.config_file_path) {
         Ok(s) => s,
-        Err(err) => { 
-            return Err(IronError::new(err, status::InternalServerError));
-        },
+        Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
 
     //let http_server_address = get_http_server_address(req).expect("Couldn't get request state at runtime");
@@ -467,10 +456,6 @@ pub fn get_status(req: &mut Request) -> IronResult<Response> {
     Ok(resp)
 }
 
-pub fn exit_with_error2(exit_tx: &Sender<ExitResult>, error: String) {
-    println!("failed a sender command err"); 
-}
-
 pub fn get_network_settings(adapter_name: &str) -> Option<NetworkSettings> {
     let ip_address = match get_ip_for_adapter(adapter_name) {
         Some(ip_address) => ip_address,
@@ -561,7 +546,7 @@ pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig, file_path: &str
         Ok(computer) => computer,
         Err(e) => return Err(io::Error::new(InvalidData, e)),
     };
-    let bytes_out = f.write(data.as_bytes())?;
+    f.write(data.as_bytes())?;
     Ok(())
 }
 
@@ -600,17 +585,17 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
 
         let valid_ip_address = match Ipv4Addr::from_str(&ip_address) {
             Ok(eth) => eth,
-            Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse ip address!")),
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Failed to parse ip address!")),
         };
     
         let valid_netmask = match Ipv4Addr::from_str(&netmask) {
             Ok(nm) => nm,
-            Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse subnet mask!")),
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Failed to parse subnet mask!")),
         };
     
         let valid_gateway = match Ipv4Addr::from_str(&gateway) {
             Ok(gw) => gw,
-            Err(e) => return Err(Error::new(ErrorKind::Other, "Failed to parse gateway!")),
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Failed to parse gateway!")),
         };
     
         let vec_dns: Vec<&str> = dns.split(',').collect();
@@ -619,7 +604,7 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
             let trimmed_ip = v.trim();
             match trimmed_ip.parse::<Ipv4Addr>() {
                 Ok(entry) => valid_dns_entries.push(entry),
-                Err(e) => return Err(Error::new(ErrorKind::Other, "Invalid DNS entry!")),
+                Err(_) => return Err(Error::new(ErrorKind::Other, "Invalid DNS entry!")),
             };
         }
         valid_dns_entries.dedup();
@@ -716,7 +701,7 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
         output_config_data.push_str("dns-nameservers "); 
         let dns_len = ethernet_settings.dns.len();
         let mut index = 0;
-        for ns in &ethernet_settings.dns {
+        for _ns in &ethernet_settings.dns {
             output_config_data.push_str(&format!("{}", ethernet_settings.gateway.to_string()));
             if index != (dns_len - 1) {
                 // if we are not on the last entry add a ,
@@ -733,15 +718,11 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
 
     println!("Config we would write\n{}", output_config_data);
 
-    let wrote_file = match write_file_contents(&output_config_data, config_file_path) {
-        Ok(wrote) => wrote,
-        Err(e) => {
-            println!("Failed to write network configuration file {} err -> {:?}\n", config_file_path, e);
-            return Err(e);
-        }
+    if write_file_contents(&output_config_data, config_file_path).is_ok() {
+        return Ok(())
+    } else {
+        return Err(Error::new(ErrorKind::Other, "configure_network_settings: couldn't write configuration to file!"));
     };
-
-    Ok(())
 }
 
 pub fn get_network_cfg_type(value: u8) -> Option<NetworkCfgType> {
