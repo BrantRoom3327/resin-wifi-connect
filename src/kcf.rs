@@ -27,9 +27,9 @@ use macos::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
 
 // this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are stripped for runtime
 pub const NO_HOTSPOT_SERVER_PORT: i32 = 8080;
+pub const TEMPLATE_DIR: &str = "/templates/";
 pub const CONFIG_TEMPLATE_NAME: &str = "config";
 pub const STATUS_TEMPLATE_NAME: &str = "status";
-//pub const WIFI_TEMPLATE_NAME: &str = "wifisettings";
 
 //defaults for config not given on the commandline
 pub const DEFAULT_HOTSPOT_INTERFACE: &str = "wlan0";
@@ -37,6 +37,7 @@ pub const DEFAULT_CONFIG_FILE_PATH: &str = "./cfg.json";
 pub const DEFAULT_AUTH_FILE_PATH: &str = "./auth.json";
 
 // parsing of sd collector xml tags.
+// TODO: Consider Pest for parsing instead of hand parsing the XML file.
 pub const PROMETHEUS_TAG_START: &str = "<PrometheusUrl>";
 pub const PROMETHEUS_TAG_END: &str = "</PrometheusUrl>";
 pub const PROXYSETTINGS_TAG_START: &str = "<ProxySettings>";
@@ -350,7 +351,6 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
 
-    //let http_server_address = get_http_server_address(req).expect("Couldn't get request state at runtime");
     let show_status_route = "http://".to_string() + &kcf.http_server_address + ROUTE_SHOW_STATUS;
 
     // redirect back to login page on success
@@ -641,17 +641,17 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
 fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_settings: &NetworkSettings, config_file_path: &str) 
     -> Result<(), io::Error>
 {
+    return Ok(())
+    /*
     let mut output_config_data = String::new();
 
-    /*
-    //keep everything with a #comment line and write it to the output.
     for line in config_data.lines() {
         let offset = line.find("#").unwrap_or(config_data.len());
         if offset == 0 { //starts with a #comment
             let saved_line = line.to_string() + "\n";
             output_config_data.push_str(&saved_line);
         }
-    }*/
+    }
 
     // loopback
     output_config_data.push_str("source-directory /etc/init.d/interfaces");
@@ -723,6 +723,7 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
     } else {
         return Err(Error::new(ErrorKind::Other, "configure_network_settings: couldn't write configuration to file!"));
     };
+    */
 }
 
 pub fn get_network_cfg_type(value: u8) -> Option<NetworkCfgType> {

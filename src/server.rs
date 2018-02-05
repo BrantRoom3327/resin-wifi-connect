@@ -209,7 +209,10 @@ pub fn start_server(
 
     // handlebar style templates
     let mut hbse = HandlebarsEngine::new();
-    hbse.add(Box::new(DirectorySource::new(PathBuf::from(ui_directory), PathBuf::from(".hbs"))));
+
+    let path = "./".to_string() + ui_directory.to_str().unwrap() + &TEMPLATE_DIR.to_string();
+    let template_path = PathBuf::from(path);
+    hbse.add(Box::new(DirectorySource::new(template_path, PathBuf::from(".hbs"))));
     if let Err(r) = hbse.reload() {
         panic!("{}", r);
     }
