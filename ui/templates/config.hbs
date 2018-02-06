@@ -54,25 +54,25 @@
 						<div class="row col-xs-12">
 							<div class="col-md-2"><label for="ethernet_ip_address">IP Address</label></div>
 							<div class="col-xs-6">
-								<input type="text" class="form-control" name="ethernet_ip_address" value="{{ethernet_ip_address}}">
+                                <input type="text" class="form-control" name="ethernet_ip_address" value="{{ip_address}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
 							<div class="col-md-2"><label for="ethernet_subnet_mask">Subnet Mask</label></div>
 							<div class="col-xs-6">
-								<input type="text" class="form-control" name="ethernet_subnet_mask" value="{{ethernet_subnet_mask}}">
+								<input type="text" class="form-control" name="ethernet_subnet_mask" value="{{netmask}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
 							<div class="col-md-2"><label for="ethernet_gateway">Gateway</label></div>
 							<div class="col-xs-6">
-								<input type="text" class="form-control" name="ethernet_gateway" value="{{ethernet_gateway}}">
+                                <input type="text" class="form-control" name="ethernet_gateway" value="{{gateway}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
 							<div class="col-md-2"><label for="ethernet_dns">DNS</label></div>
 							<div class="col-xs-6">
-								<input type="text" class="form-control" name="ethernet_dns" value="{{#each ethernet_dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
+								<input type="text" class="form-control" name="ethernet_dns" value="{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
 							</div>
 						</div>
 						<div class="row-spacer">

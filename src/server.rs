@@ -321,7 +321,6 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
 
     //see NetworkCfgType for the allowed values.
     let network_configuration_type = get_param!(params, "network_configuration_type", u8);
-    println!("Network type is {}", network_configuration_type);
 
     // wifi settings
     let wifi_ssid = get_param!(params, "wifi_ssid", String);

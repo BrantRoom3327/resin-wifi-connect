@@ -9,7 +9,7 @@ extern crate network_manager;
 extern crate params;
 extern crate persistent;
 extern crate router;
-extern crate serde_json;
+#[macro_use] extern crate serde_json;
 extern crate staticfile;
 extern crate handlebars;
 extern crate handlebars_iron as hbs;
