@@ -31,7 +31,8 @@ pub const NO_HOTSPOT_SERVER_PORT: i32 = 8080;
 pub const TEMPLATE_DIR: &str = "/templates/";
 pub const CONFIG_TEMPLATE: &str = "config";
 pub const STATUS_TEMPLATE: &str = "status";
-pub const WRITE_ETHERNET_SETTINGS_TEMPLATE: &str = "ethernet-network-config";
+pub const ETHERNET_SETTINGS_TEMPLATE: &str = "./ui/templates/ethernet-network-config.hbs";
+pub const WIFI_SETTINGS_TEMPLATE: &str = "./ui/templates/wifi-network-config.hbs";
 
 //defaults for config not given on the commandline
 pub const DEFAULT_HOTSPOT_INTERFACE: &str = "wlan0";
@@ -86,24 +87,6 @@ impl NetworkSettings {
             dns: Vec::new()
         }
     }
-    /*
-    pub fn to_json(&self) -> String {
-        let j = json!({
-        "adapter_name": self.adapter_name,
-        "dhcp_enabled": self.dhcp_enabled.to_string(),
-        "ip_address": self.ip_address.to_string(),
-        "netmask": self.netmask.to_string(),
-        "gateway": self.gateway.to_string(),
-        "dns": "",
-        });
-
- //   for entry in ethernet_settings.dns {
- //       cfg.ethernet_dns.push(entry.to_string());
- //   }
-
-        format!("{}", j)
-    }
-    */
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -112,7 +95,8 @@ pub struct SmartDiagnosticsConfig {
     pub cloud_storage_enabled: bool,
     pub data_destination_url: String,
 
-    // this is how the network supposted to be configured
+    // this is how the network supposted to be configured, eth static, wifi dhcp, etc, look at
+    // NetworkCfgType for the values.
     pub network_configuration_type: u8,  //at runtime a NetworkCfgType
 
     //ethernet static settings
@@ -128,12 +112,12 @@ pub struct SmartDiagnosticsConfig {
     pub proxy_gateway: String,
     pub proxy_gateway_port: u16,
 
-    // master key used to generate cookie hashes.
-    pub cookie_key: String,
-    pub network_cfg_file: String, // generally will be /etc/network/interfaces but if you are testing it can be something else.
+    pub cookie_key: String, // master key used to generate cookie hashes.
     pub collector_cfg_file: String, // The sdcollector.xml file that the sdcollector reads for proxy settings.
     pub collector_ethernet_interface: String,  //the name of the ethernet adapter to configure for the collector "eth0", "eth1" etc
     pub collector_wifi_interface: String,  //wlan0 or wlan1, etc
+    pub resin_ethernet_output_file: String, //output file full path and name, transformed from the configuration template with substitutions (.hbs)
+    pub resin_wifi_output_file: String, //output file full path and name, transformed from the configuration template with substitutions (.hbs)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -165,14 +149,14 @@ pub struct SDCollectoProxySettings {
     pub Password: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Debug, Clone)]
+#[derive(Deserialize, PartialEq, PartialOrd, Debug, Clone)]
 pub struct Auth {
     pub username: String,
     pub password: String,
 }
 
 #[derive(Debug, Clone)]
-pub struct KCFRuntimeData {
+pub struct RuntimeData {
     pub http_server_address: String,
     //config
     pub config_file_path: String, 
@@ -210,7 +194,7 @@ pub fn create_cookie(cookie_key: &[u8]) -> String {
 }
 
 //TODO: Add cookie secure and database
-pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool {
+pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> Result<(), io::Error> {
     if cookie_key.len() != 64 {
         panic!("validate_cookie: The cookie master key is invalid at runtime!  This shouldn't happen!\n\n");
     }
@@ -218,9 +202,9 @@ pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool
     let (name, value) = cookie.name_value();
 
     if COOKIE_NAME == name && COOKIE_VALUE == value {
-        return true;
+        return Ok(());
     } else {
-        return false;
+        return Err(io::Error::new(InvalidData, format!("Cookie is not valid!")));
     };
 }
 
@@ -276,16 +260,13 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::
 
     xml_data.insert_str(proxy_settings_start, &collector_string);
 
-    if write_file_contents(&xml_data, &cfg.collector_cfg_file).is_err() {
+    if write_file_contents(&xml_data, &cfg.collector_cfg_file, false).is_err() {
         return Err(io::Error::new(InvalidData, format!("Failed to write to {}!", cfg.collector_cfg_file)));
     }
 
     Ok(())
 }
 
-// 
-// KCF specific
-//
 pub fn set_config(req: &mut Request) -> IronResult<Response> {
 
     let options = match collect_set_config_options(req) {
@@ -295,18 +276,18 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
 
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
 
-    //create a mutable instance of config data, we will edit it and write it to the original file
-    //location from startup.
+    //create a mutable instance of config data, we will edit it and write it back out.
     let mut config_data = kcf.config_data.clone();
 
     // make sure the network configuration type gets validated here and type converted
     let network_configuration_type = match get_network_cfg_type(options.network_configuration_type) {
         Some(net) => net,
-        None =>return Err(IronError::new(io::Error::new(InvalidData, format!("Invalid network configuration value")), status::InternalServerError)),
+        None => return Err(IronError::new(io::Error::new(InvalidData, format!("Invalid network configuration value")), status::InternalServerError)),
     };
 
-    let mut validated_ethernet_settings = match validate_network_settings(
+    let validated_ethernet_settings = match validate_network_settings(
             &network_configuration_type, 
+            &config_data.collector_ethernet_interface,
             &options.ethernet_ip_address, 
             &options.ethernet_subnet_mask, 
             &options.ethernet_gateway,
@@ -316,12 +297,13 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     };
 
-    validated_ethernet_settings.adapter_name = config_data.collector_ethernet_interface.clone();
-
+    // FIXME: use a default
     let wifi_settings = NetworkSettings::new("wlan0".to_string());
 
     // setup ethernet adapter with new settings in config file.
-    if configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, &kcf.config_file_path).is_err() {
+    if configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, 
+                                         &config_data.resin_ethernet_output_file, 
+                                         &config_data.resin_wifi_output_file).is_err() {
         return Err(IronError::new(io::Error::new(InvalidData, format!("Couldn't configure network settings!")), status::InternalServerError));
     }
 
@@ -404,16 +386,13 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
     let mut cfg = kcf.config_data.clone();
 
     match validate_cookie(cfg.cookie_key.as_bytes(), &c) {
-        true => (),
-        false => return Ok(Response::with((status::Unauthorized, "Invalid login.  Make sure you are authenticated to use this site."))),
+        Ok(_) => (),
+        Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     }
 
     let net_settings = match get_network_settings(&kcf.config_data.collector_ethernet_interface) {
         Some(settings) => settings,
-        None => {
-            println!("No network settings returned");
-            NetworkSettings::new("not_valid".to_string())
-        }
+        None => return Ok(Response::with((status::Unauthorized, "Failed to acquire network settings from ethernet adapter."))),
     };
 
     //NOTE: here overwrite the config we read from disk, we are not going to store it again.
@@ -486,12 +465,13 @@ pub fn get_network_settings(adapter_name: &str) -> Option<NetworkSettings> {
         None => return None,
     };
 
-    Some(NetworkSettings{adapter_name: adapter_name.to_string(), 
+    Some(NetworkSettings{
+        adapter_name: adapter_name.to_string(), 
         dhcp_enabled: false,
-        ip_address: ip_address,
-        netmask: netmask,
-        gateway: gateway,
-        dns: dns})
+        ip_address,
+        netmask,
+        gateway,
+        dns})
 }
 
 // get ip and netmask for the adapter
@@ -539,8 +519,13 @@ pub fn load_file_as_string(file_path: &str) -> Result<String, io::Error> {
     Ok(data)
 }
 
-pub fn write_file_contents(data: &str, file_path: &str) -> io::Result<()> {
-    let mut f = OpenOptions::new().write(true).truncate(true).open(file_path)?;
+pub fn write_file_contents(data: &str, file_path: &str, create_new_file: bool) -> io::Result<()> {
+    let mut f = if create_new_file {
+        OpenOptions::new().write(true).truncate(true).create(true).open(file_path)?
+    } else {
+        OpenOptions::new().write(true).truncate(true).open(file_path)?
+    };
+
     let bytes_out = f.write(data.as_bytes())?;
     let file_len = data.as_bytes().len();
     if bytes_out != file_len {
@@ -570,11 +555,9 @@ pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
     }
 }
 
-fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_address: &str, netmask: &str, gateway: &str, dns: &str)
+fn validate_network_settings(network_configuration_type: &NetworkCfgType, adapter_name: &str, ip_address: &str, netmask: &str, gateway: &str, dns: &str)
     -> Result<NetworkSettings, io::Error> 
  {
-     let adapter_name = "not_valid".to_string();
-
     // we now have network_configuration_type:
     // * Eth0 static
     // * Eth0 dhcp
@@ -582,7 +565,7 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
 
     if network_configuration_type == &NetworkCfgType::Ethernet_DHCP {
         // return invalid static info, we are using dhcp
-        let mut dhcp_settings = NetworkSettings::new(adapter_name);
+        let mut dhcp_settings = NetworkSettings::new(adapter_name.to_string());
         dhcp_settings.dhcp_enabled = true;
         Ok(dhcp_settings)
 
@@ -616,7 +599,7 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
 
         // return static setup
         return Ok(NetworkSettings{
-            adapter_name: adapter_name,
+            adapter_name: adapter_name.to_string(),
             dhcp_enabled: false,
             ip_address: valid_ip_address, 
             netmask: valid_netmask,
@@ -626,7 +609,7 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
     } else if network_configuration_type == &NetworkCfgType::Wifi_DHCP {
         // here we also want invalid ethernet settings but we want
         // store the last connected SSID for future use when switching back and forth for the user.
-        let mut wifi_settings = NetworkSettings::new(adapter_name);
+        let mut wifi_settings = NetworkSettings::new(adapter_name.to_string());
         wifi_settings.dhcp_enabled = true;
         Ok(wifi_settings)
     } else {
@@ -636,19 +619,14 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
 
 // configure all the network settings in one go.
 // wifi and ethernet.
-fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_settings: &NetworkSettings, config_file_path: &str) 
-    -> Result<(), io::Error>
+// FIXME: Can this be improved to not create new HBS instances?
+fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_settings: &NetworkSettings, 
+                                     ethernet_output_file: &str, wifi_output_file: &str) -> Result<(), io::Error>
 {
-    let template_form = match load_file_as_string("./ui/templates/ethernet-network-config.hbs") {
+    let template_form = match load_file_as_string(ETHERNET_SETTINGS_TEMPLATE) {
         Ok(t) => t,
-        Err(e) => {
-            println!("Couldnt find the file!");
-            return Err(io::Error::new(InvalidData, format!("Could not load -> file")))
-        },
+        Err(e) => return Err(io::Error::new(InvalidData, format!("Could not load -> file, err {:?}", e))),
     };
-
-    //let some_json = ethernet_settings.to_json();
-    //println!("Some json is {}", some_json);
 
     // register the template. The template string will be verified and compiled.
     let mut h = Handlebars::new();
@@ -657,14 +635,14 @@ fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_s
 
     let t = h.render("t1", &ethernet_settings).unwrap();
 
-    if write_file_contents(&t.to_string(), "./resin-ethernet").is_err() {
-        println!("Failed to write junk");
-        return Err(io::Error::new(InvalidData, format!("Failed to write to junk.txt!")));
+    if write_file_contents(&t.to_string(), ethernet_output_file, true).is_err() {
+        return Err(io::Error::new(InvalidData, format!("Failed to write {}", ethernet_output_file)));
     }
+
+    //FIXME: Write out the wifi output file also based on a template
     
     return Ok(())
 }
-
 
 pub fn get_network_cfg_type(value: u8) -> Option<NetworkCfgType> {
      let network_configuration_type = match NetworkCfgType::from_u8(value) {

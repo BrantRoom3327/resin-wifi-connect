@@ -31,7 +31,7 @@ pub struct RequestSharedState {
     network_tx: Sender<NetworkCommand>,
     exit_tx: Sender<ExitResult>,
     //kcf specific
-    kcf: KCFRuntimeData,
+    kcf: RuntimeData,
 }
 
 impl typemap::Key for RequestSharedState {
@@ -140,7 +140,7 @@ pub fn start_server(
     //TODO: Create a function, validate_cookie_key()
 
     //
-    // deserialize SmartDiagnosticsConfig and Auth directly into KCFRunTimeData. 
+    // deserialize SmartDiagnosticsConfig and Auth directly into RunTimeData. 
     // use this at runtime to inject configuration state into templates and processing.
     //
     let mut config_data = match load_diagnostics_config_file(&config_file_path) {
@@ -177,7 +177,7 @@ pub fn start_server(
     }
 
     let http_server_address_clone = http_server_address.clone();
-    let kcf = KCFRuntimeData {
+    let kcf = RuntimeData {
         http_server_address,
         config_file_path,
         config_data,
@@ -346,7 +346,7 @@ pub fn collect_do_auth_options(req: &mut Request) -> IronResult<Auth> {
     Ok(Auth {username, password})
 }
 
-pub fn get_kcf_runtime_data(req: &mut Request) -> Result<KCFRuntimeData, IronError> {
+pub fn get_kcf_runtime_data(req: &mut Request) -> Result<RuntimeData, IronError> {
     let state = get_request_state!(req);
     Ok(state.kcf.clone())
 }
