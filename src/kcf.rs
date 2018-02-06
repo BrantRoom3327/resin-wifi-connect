@@ -65,9 +65,6 @@ enum_from_primitive! {
     }
 }
 
-//
-// KCF Only Routes and functions, kept out of mainline files to avoid conflicts.
-//
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NetworkSettings {
     pub adapter_name: String,
@@ -79,6 +76,17 @@ pub struct NetworkSettings {
 }
 
 impl NetworkSettings {
+    pub fn new(adapter: String) -> NetworkSettings {
+        NetworkSettings {
+            adapter_name: adapter, 
+            dhcp_enabled: false,
+            ip_address: "0.0.0.0".parse().unwrap(),
+            netmask: "0.0.0.0".parse().unwrap(),
+            gateway: "0.0.0.0".parse().unwrap(),
+            dns: Vec::new()
+        }
+    }
+    /*
     pub fn to_json(&self) -> String {
         let j = json!({
         "adapter_name": self.adapter_name,
@@ -95,6 +103,7 @@ impl NetworkSettings {
 
         format!("{}", j)
     }
+    */
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -179,7 +188,6 @@ impl fmt::Display for SmartDiagnosticsConfig {
     }
 }
 
-// FIXME : lifetime of Result<String, io::Error>
 pub fn create_cookie(cookie_key: &[u8]) -> String {
     if cookie_key.len() != 64 {
         panic!("create_cookie: The cookie master key is invalid at runtime!  This shouldn't happen!\n\n");
@@ -209,13 +217,11 @@ pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> bool
 
     let (name, value) = cookie.name_value();
 
-    let auth = if COOKIE_NAME == name && COOKIE_VALUE == value {
-        true
+    if COOKIE_NAME == name && COOKIE_VALUE == value {
+        return true;
     } else {
-        false
+        return false;
     };
-
-    auth
 }
 
 // instead of wiping the line, wipe the data between begin and end tags and insert new.
@@ -263,7 +269,7 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::
         Password: cfg.proxy_password.clone(),
     };
     
-    let collector_string = match serde_json::to_string(&collector_settings) {
+    let collector_string = match serde_json::to_string_pretty(&collector_settings) {
         Ok(json) => json,
         Err(e) => return Err(io::Error::new(InvalidData, format!("Failed to serialize data to xml! file {} err {}", cfg.collector_cfg_file, e))),
     };
@@ -312,15 +318,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
 
     validated_ethernet_settings.adapter_name = config_data.collector_ethernet_interface.clone();
 
-    // TODO are these always correct in the ethernet enabled case.
-    let wifi_settings = NetworkSettings {
-        adapter_name: "wlan0".to_string(),
-        dhcp_enabled: false,
-        ip_address: "0.0.0.0".parse().unwrap(),
-        gateway: "0.0.0.0".parse().unwrap(),
-        netmask: "0.0.0.0".parse().unwrap(),
-        dns: Vec::new(),
-    };
+    let wifi_settings = NetworkSettings::new("wlan0".to_string());
 
     // setup ethernet adapter with new settings in config file.
     if configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, &kcf.config_file_path).is_err() {
@@ -414,13 +412,7 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
         Some(settings) => settings,
         None => {
             println!("No network settings returned");
-            NetworkSettings{
-                            dhcp_enabled: false,
-                            ip_address: "0.0.0.0".parse().unwrap(),
-                            netmask: "0.0.0.0".parse().unwrap(),
-                            gateway: "0.0.0.0".parse().unwrap(),
-                            dns: Vec::new(),
-                            adapter_name: "not_valid".to_string()}
+            NetworkSettings::new("not_valid".to_string())
         }
     };
 
@@ -494,8 +486,6 @@ pub fn get_network_settings(adapter_name: &str) -> Option<NetworkSettings> {
         None => return None,
     };
 
-    // FIXME: Can we determine if dhcp is already on this way?
-    // we chould check for a running dhclient or dhcpcd on the sd_collector interface?
     Some(NetworkSettings{adapter_name: adapter_name.to_string(), 
         dhcp_enabled: false,
         ip_address: ip_address,
@@ -562,7 +552,7 @@ pub fn write_file_contents(data: &str, file_path: &str) -> io::Result<()> {
 
 pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig, file_path: &str) -> io::Result<()> {
     let mut f = OpenOptions::new().write(true).truncate(true).open(file_path)?;
-    let data = match serde_json::to_string(&config) {
+    let data = match serde_json::to_string_pretty(&config) {
         Ok(computer) => computer,
         Err(e) => return Err(io::Error::new(InvalidData, e)),
     };
@@ -583,7 +573,7 @@ pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
 fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_address: &str, netmask: &str, gateway: &str, dns: &str)
     -> Result<NetworkSettings, io::Error> 
  {
-     let adapter_name = "".to_string();
+     let adapter_name = "not_valid".to_string();
 
     // we now have network_configuration_type:
     // * Eth0 static
@@ -592,14 +582,9 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
 
     if network_configuration_type == &NetworkCfgType::Ethernet_DHCP {
         // return invalid static info, we are using dhcp
-        return Ok(NetworkSettings{ 
-             adapter_name: adapter_name, 
-             dhcp_enabled: true,
-             ip_address: "0.0.0.0".parse().unwrap(),
-             netmask: "0.0.0.0".parse().unwrap(),
-             gateway: "0.0.0.0".parse().unwrap(),
-             dns: Vec::new(),
-         });
+        let mut dhcp_settings = NetworkSettings::new(adapter_name);
+        dhcp_settings.dhcp_enabled = true;
+        Ok(dhcp_settings)
 
     } else if network_configuration_type == &NetworkCfgType::Ethernet_Static {
 
@@ -641,16 +626,9 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, ip_add
     } else if network_configuration_type == &NetworkCfgType::Wifi_DHCP {
         // here we also want invalid ethernet settings but we want
         // store the last connected SSID for future use when switching back and forth for the user.
-
-        //currently there is no info here, 
-        return Ok(NetworkSettings{ 
-             adapter_name: adapter_name, 
-             dhcp_enabled: true,
-             ip_address: "0.0.0.0".parse().unwrap(),
-             netmask: "0.0.0.0".parse().unwrap(),
-             gateway: "0.0.0.0".parse().unwrap(),
-             dns: Vec::new(),
-         });
+        let mut wifi_settings = NetworkSettings::new(adapter_name);
+        wifi_settings.dhcp_enabled = true;
+        Ok(wifi_settings)
     } else {
         return Err(Error::new(ErrorKind::Other, "validate_network_settings: Invalid Network configuration type!"));
     }
