@@ -21,14 +21,13 @@ done
 export BUNDLE_DIR=./bundle
 rm -rf $BUNDLE_DIR
 mkdir $BUNDLE_DIR
-cp cfg.json auth.json $BUNDLE_DIR
-cp -R public $BUNDLE_DIR
+
+cp -R data $BUNDLE_DIR
+cp -R ui $BUNDLE_DIR
 
 if [ "${PRODUCTION}" == "1" ]; then
-    #For Arm
     cp target/armv7-unknown-linux-gnueabihf/release/wifi-connect $BUNDLE_DIR
 else
-    #For x86_64
     cp target/x86_64-unknown-linux-gnu/release/wifi-connect $BUNDLE_DIR
 fi
 

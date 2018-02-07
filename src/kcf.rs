@@ -245,81 +245,27 @@ pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> Resu
 }
 
 // instead of wiping the line, wipe the data between begin and end tags and insert new.
-pub fn update_sd_collector_xml(cfg: &SmartDiagnosticsConfig) -> Result<(), io::Error> {
-    let mut xml_data = match load_file_as_string(&cfg.output_files.collector_xml_file) {
-        Ok(xml) => xml,
-        Err(e) => {
-            return Err(io::Error::new(
-                InvalidData,
-                format!(
-                    "Could not load -> {} e={:?}",
-                    cfg.output_files.collector_xml_file, e
-                ),
-            ))
-        },
-    };
+pub fn update_sd_collector_xml(cfg: &SmartDiagnosticsConfig) -> Result<(), io::Error>
+{
+    let mut xml_data = load_file_as_string(&cfg.output_files.collector_xml_file)?;
+    
+    // find <PrometheusURL>
+    let mut prometheus_start = find_offset_in_string(&xml_data, PROMETHEUS_TAG_START)?;
+    prometheus_start += PROMETHEUS_TAG_START.len(); //skip to end of string
+    let prometheus_end = find_offset_in_string(&xml_data, PROMETHEUS_TAG_END)?;
 
-    let prometheus_start = match find_offset_in_string(&xml_data, PROMETHEUS_TAG_START) {
-        Some(start) => start + PROMETHEUS_TAG_START.to_string().len(),
-        None => {
-            return Err(io::Error::new(
-                InvalidData,
-                format!(
-                    "Could not load find {} tag in {}",
-                    PROMETHEUS_TAG_START.to_string(),
-                    cfg.output_files.collector_xml_file
-                ),
-            ))
-        },
-    };
-
-    let prometheus_end = match find_offset_in_string(&xml_data, PROMETHEUS_TAG_END) {
-        Some(end) => end,
-        None => {
-            return Err(io::Error::new(
-                InvalidData,
-                format!(
-                    "Could not load find {} tag in {}",
-                    PROMETHEUS_TAG_END.to_string(),
-                    cfg.output_files.collector_xml_file
-                ),
-            ))
-        },
-    };
-
-    let _: String = xml_data.drain(prometheus_start..prometheus_end).collect(); //drain bytes
+    //delete data inbetween tags
+    let _: String = xml_data.drain(prometheus_start..prometheus_end).collect();
 
     //now inject the data after the start tag.
     xml_data.insert_str(prometheus_start, &cfg.data_destination_url);
 
-    let proxy_settings_start = match find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_START) {
-        Some(start) => start + PROXYSETTINGS_TAG_START.to_string().len(),
-        None => {
-            return Err(io::Error::new(
-                InvalidData,
-                format!(
-                    "Could not load find {} tag in {}",
-                    PROXYSETTINGS_TAG_START.to_string(),
-                    cfg.output_files.collector_xml_file
-                ),
-            ))
-        },
-    };
+    // find <ProxySettings>
+    let mut proxy_settings_start = find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_START)?;
+    proxy_settings_start += PROXYSETTINGS_TAG_START.len();
+    let proxy_settings_end = find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_END)?;
 
-    let proxy_settings_end = match find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_END) {
-        Some(end) => end,
-        None => {
-            return Err(io::Error::new(
-                InvalidData,
-                format!(
-                    "Could not load find {} tag in {}",
-                    PROXYSETTINGS_TAG_END.to_string(),
-                    cfg.output_files.collector_xml_file
-                ),
-            ))
-        },
-    };
-
+    //delete data between tags
     let _drained_of_settings: String = xml_data
         .drain(proxy_settings_start..proxy_settings_end)
         .collect();
@@ -347,26 +293,18 @@ pub fn update_sd_collector_xml(cfg: &SmartDiagnosticsConfig) -> Result<(), io::E
         },
     };
 
+    //inject json into xml file
     xml_data.insert_str(proxy_settings_start, &collector_string);
 
-    if write_file_contents(&xml_data, &cfg.output_files.collector_xml_file, true).is_err() {
-        return Err(io::Error::new(
-            InvalidData,
-            format!(
-                "Failed to write to {}!",
-                cfg.output_files.collector_xml_file
-            ),
-        ));
-    }
-
+    //write the altered file
+    write_file_contents(&xml_data, &cfg.output_files.collector_xml_file, true)?;
+        
     Ok(())
 }
 
 pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
-    let options = match collect_set_config_options(req) {
-        Ok(opt) => opt,
-        Err(e) => return Err(e),
-    };
+
+    let options = collect_set_config_options(req)?;
 
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
 
@@ -374,8 +312,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     let mut config_data = kcf.config_data.clone();
 
     // make sure the network configuration type gets validated here and type converted
-    let network_configuration_type = match get_network_cfg_type(options.network_configuration_type)
-    {
+    let network_configuration_type = match get_network_cfg_type(options.network_configuration_type) {
         Some(net) => net,
         None => {
             return Err(IronError::new(
@@ -564,22 +501,10 @@ pub fn http_route_get_status(req: &mut Request) -> IronResult<Response> {
 }
 
 pub fn get_network_settings(adapter_name: &str) -> Option<NetworkSettings> {
-    let ip_address = match get_ip_for_adapter(adapter_name) {
-        Some(ip_address) => ip_address,
-        None => return None,
-    };
-    let netmask = match get_netmask_for_adapter(adapter_name) {
-        Some(netmask) => netmask,
-        None => return None,
-    };
-    let gateway = match get_gateway_for_adapter(adapter_name) {
-        Some(gateway) => gateway,
-        None => return None,
-    };
-    let dns = match get_dns_entries() {
-        Some(dns) => dns,
-        None => return None,
-    };
+    let ip_address = get_ip_for_adapter(adapter_name)?;
+    let netmask = get_netmask_for_adapter(adapter_name)?;
+    let gateway = get_gateway_for_adapter(adapter_name)?;
+    let dns = get_dns_entries()?;
 
     Some(NetworkSettings {
         adapter_name: adapter_name.to_string(),
@@ -637,7 +562,7 @@ pub fn load_file_as_string(file_path: &str) -> Result<String, io::Error> {
     Ok(data)
 }
 
-pub fn write_file_contents(data: &str, file_path: &str, create_new_file: bool) -> io::Result<()> {
+pub fn write_file_contents(data: &str, file_path: &str, create_new_file: bool) -> Result<(), io::Error> {
     let mut f = if create_new_file {
         OpenOptions::new()
             .write(true)
@@ -663,29 +588,23 @@ pub fn write_file_contents(data: &str, file_path: &str, create_new_file: bool) -
     Ok(())
 }
 
-pub fn write_diagnostics_config(
-    config: &SmartDiagnosticsConfig,
-    file_path: &str,
-) -> io::Result<()> {
-    let mut f = OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .open(file_path)?;
-    let data = match serde_json::to_string_pretty(&config) {
-        Ok(computer) => computer,
-        Err(e) => return Err(io::Error::new(InvalidData, e)),
-    };
+pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig, file_path: &str) -> Result<(), io::Error>
+{
+    let data = serde_json::to_string_pretty(&config)?;
+
+    let mut f = OpenOptions::new().write(true).truncate(true).open(file_path)?;
     f.write(data.as_bytes())?;
+
     Ok(())
 }
 
-pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
+pub fn find_offset_in_string(haystack: &str, needle: &str) -> Result<usize, io::Error> {
     let haystack_len = haystack.len();
     let offset = haystack.find(needle).unwrap_or(haystack_len);
     if offset != haystack_len {
-        return Some(offset);
+        Ok(offset)
     } else {
-        return None;
+        Err(Error::new(ErrorKind::Other, format!("Failed to find offset of {} in string!", needle)))
     }
 }
 
@@ -708,6 +627,7 @@ fn validate_network_settings(
         dhcp_settings.dhcp_enabled = true;
         Ok(dhcp_settings)
     } else if network_configuration_type == &NetworkCfgType::Ethernet_Static {
+
         let valid_ip_address = match Ipv4Addr::from_str(&ip_address) {
             Ok(eth) => eth,
             Err(_) => return Err(Error::new(ErrorKind::Other, "Failed to parse ip address!")),
@@ -769,53 +689,22 @@ fn configure_system_network_settings(
     static_streaming_ethernet_output_file: &str)
     -> Result<(), io::Error> {
 
-    // FIXME: can we use the handlebars template engine from the http server?
     println!("configure_network_settings! ethernet settings dhcp {} wifi dhcp {}", ethernet_settings.dhcp_enabled, wifi_settings.dhcp_enabled);
 
-    // we don't have ACID transactions here so if something fails, might need a way to revert the
-    // previous file.  Moving the old out of the way would do it.
-
     if ethernet_settings.dhcp_enabled { //ethernet dhcp, wifi off
-        //ethernet dhcp
-        match write_network_settings(ethernet_settings, ETHERNET_DHCP_ENABLE_TEMPLATE, ethernet_output_file) {
-            Ok(()) => (),
-            Err(e) => return Err(e),
-        }
-        //wifi disable
-        match write_network_settings(wifi_settings, WIFI_DISABLE_TEMPLATE, wifi_output_file) {
-            Ok(()) => (),
-            Err(e) => return Err(e),
-        }
+        write_network_settings(ethernet_settings, ETHERNET_DHCP_ENABLE_TEMPLATE, ethernet_output_file)?;
+        write_network_settings(wifi_settings, WIFI_DISABLE_TEMPLATE, wifi_output_file)?;
     } else if wifi_settings.dhcp_enabled { //wifi dhcp, ethernet on but not routed
-        // wifi dhcp enable
-        match write_network_settings(wifi_settings, WIFI_DHCP_ENABLE_TEMPLATE, wifi_output_file) {
-            Ok(()) => (),
-            Err(e) => return Err(e),
-        }
-        // ethernet not routed
-        match write_network_settings(ethernet_settings, ETHERNET_DISABLE_TEMPLATE, ethernet_output_file) {
-            Ok(()) => (),
-            Err(e) => return Err(e),
-        }
+        write_network_settings(wifi_settings, WIFI_DHCP_ENABLE_TEMPLATE, wifi_output_file)?;
+        write_network_settings(ethernet_settings, ETHERNET_DISABLE_TEMPLATE, ethernet_output_file)?;
     } else {
-        //write ethernet static setup
-        match write_network_settings(ethernet_settings, ETHERNET_STATIC_SETTINGS_TEMPLATE, ethernet_output_file) {
-            Ok(()) => (),
-            Err(e) => return Err(e),
-        }
-        //wifi disable
-        match write_network_settings(wifi_settings, WIFI_DISABLE_TEMPLATE, wifi_output_file) {
-            Ok(()) => (),
-            Err(e) => return Err(e),
-        }
+        write_network_settings(ethernet_settings, ETHERNET_STATIC_SETTINGS_TEMPLATE, ethernet_output_file)?;
+        write_network_settings(wifi_settings, WIFI_DISABLE_TEMPLATE, wifi_output_file)?;
     }
 
     //always write the static network settings out. (eth1 or similar)
-    match write_network_settings(static_streaming_ethernet_settings, ETHERNET_STATIC_SETTINGS_TEMPLATE, 
-                                 static_streaming_ethernet_output_file) {
-        Ok(()) => (),
-        Err(e) => return Err(e),
-    }
+    write_network_settings(static_streaming_ethernet_settings, ETHERNET_STATIC_SETTINGS_TEMPLATE, 
+                                 static_streaming_ethernet_output_file)?;
 
     return Ok(());
 }
@@ -823,26 +712,13 @@ fn configure_system_network_settings(
 fn write_network_settings(settings: &NetworkSettings, template_path: &str, output_file: &str)
     -> Result<(), io::Error>
 {
-    let template_input = match load_file_as_string(template_path) {
-        Ok(t) => t,
-        Err(e) => {
-            return Err(io::Error::new(
-                   InvalidData,
-                format!("Could not load -> file {}, err {:?}", template_path, e),
-            ))
-         },
-    };
+    let template_input = load_file_as_string(template_path)?;
 
     let mut h = Handlebars::new();
     assert!(h.register_template_string("static", template_input).is_ok());
     let t = h.render("static", &settings).unwrap();
 
-    if write_file_contents(&t.to_string(), output_file, true).is_err() {
-        return Err(io::Error::new(
-            InvalidData,
-            format!("Failed to write {} for network interface {:?}", output_file, settings.adapter_name),
-        ));
-    }
+    write_file_contents(&t.to_string(), output_file, true)?;
 
     Ok(())
 }
