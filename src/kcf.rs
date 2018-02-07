@@ -119,23 +119,23 @@ pub struct OutputFiles {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ProxySettings {
+    pub enabled: bool,
+    pub login: String,
+    pub password: String,
+    pub gateway: String,
+    pub gateway_port: u16,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SmartDiagnosticsConfig {
     // cloud storage settings
     pub cloud_storage_enabled: bool,
     pub data_destination_url: String,
-
-    // this is how the network supposted to be configured, eth static, wifi dhcp, etc, look at
-    // NetworkCfgType for the values.
     pub network_configuration_type: u8,  //at runtime a NetworkCfgType
-
-    // proxy settings
-    pub proxy_enabled: bool,
-    pub proxy_login: String,
-    pub proxy_password: String,
-    pub proxy_gateway: String,
-    pub proxy_gateway_port: u16,
-
     pub cookie_key: String, // master key used to generate cookie hashes.
+
+    pub proxy: ProxySettings,
     pub network_interfaces: NetworkInterfaces,
     pub output_files: OutputFiles,
 }
@@ -151,11 +151,7 @@ pub struct SetConfigOptionsFromPost {
     pub ethernet_subnet_mask: String,
     pub ethernet_gateway: String,
     pub ethernet_dns: String,
-    pub proxy_enabled: bool,
-    pub proxy_login: String,
-    pub proxy_password: String,
-    pub proxy_gateway: String,
-    pub proxy_gateway_port: u16,
+    pub proxy: ProxySettings,
 }
 
 #[allow(non_snake_case)]
@@ -265,12 +261,12 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::
 
     // now inject the data, starting at the end of the start tag
     let collector_settings = SDCollectoProxySettings {
-        Enabled: cfg.proxy_enabled,
-        Server: cfg.proxy_gateway.clone(),
-        Port: cfg.proxy_gateway_port,
+        Enabled: cfg.proxy.enabled,
+        Server: cfg.proxy.gateway.clone(),
+        Port: cfg.proxy.gateway_port,
         UseDefaultCredentials: false,
-        User: cfg.proxy_login.clone(),
-        Password: cfg.proxy_password.clone(),
+        User: cfg.proxy.login.clone(),
+        Password: cfg.proxy.password.clone(),
     };
     
     let collector_string = match serde_json::to_string(&collector_settings) {
@@ -339,15 +335,11 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
         config_data.data_destination_url = options.destination_address;
     }
 
-    if options.proxy_enabled {
-        config_data.proxy_login = options.proxy_login;
-        config_data.proxy_password = options.proxy_password;
-        config_data.proxy_gateway = options.proxy_gateway;
-        config_data.proxy_gateway_port = options.proxy_gateway_port;
+    if options.proxy.enabled {
+        config_data.proxy = options.proxy;
     }
 
     // if we get this far, update the configuration, it was successful.
-    config_data.proxy_enabled = options.proxy_enabled;
     config_data.cloud_storage_enabled = options.cloud_storage_enabled;
     config_data.network_configuration_type = options.network_configuration_type;
 

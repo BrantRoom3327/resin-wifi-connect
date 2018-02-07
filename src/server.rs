@@ -313,11 +313,17 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
     //cloud settings
     let cloud_storage_enabled = get_param!(params, "cloud_storage_enabled", bool);
     let destination_address = get_param!(params, "destinationaddress", String);
-    let proxy_enabled = get_param!(params, "proxy_enabled", bool);
-    let proxy_login = get_param!(params, "proxy_login", String);
-    let proxy_password = get_param!(params, "proxy_password", String);
-    let proxy_gateway = get_param!(params, "proxy_gateway", String);
-    let proxy_gateway_port = get_param!(params, "proxy_gateway_port", u16);
+    let enabled = get_param!(params, "proxy_enabled", bool);
+    let login = get_param!(params, "proxy_login", String);
+    let password = get_param!(params, "proxy_password", String);
+    let gateway = get_param!(params, "proxy_gateway", String);
+    let gateway_port = get_param!(params, "proxy_gateway_port", u16);
+    let proxy = ProxySettings {
+        enabled: enabled,
+        login: login,
+        password: password,
+        gateway: gateway,
+        gateway_port: gateway_port};
 
     //see NetworkCfgType for the allowed values.
     let network_configuration_type = get_param!(params, "network_configuration_type", u8);
@@ -332,8 +338,8 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
     let ethernet_gateway = get_param!(params, "ethernet_gateway", String);
     let ethernet_dns = get_param!(params, "ethernet_dns", String);
 
-    Ok(SetConfigOptionsFromPost{ cloud_storage_enabled, destination_address, proxy_enabled, proxy_login,
-        proxy_password, proxy_gateway, proxy_gateway_port, network_configuration_type, wifi_ssid, wifi_passphrase, 
+    Ok(SetConfigOptionsFromPost{ cloud_storage_enabled, destination_address, proxy, network_configuration_type, 
+        wifi_ssid, wifi_passphrase, 
         ethernet_ip_address, ethernet_subnet_mask, ethernet_gateway, ethernet_dns})
 }
 

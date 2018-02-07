@@ -2,12 +2,14 @@
   "cloud_storage_enabled": true,
   "data_destination_url": "http://www.yahoo.com",
   "network_configuration_type": 0,
-  "proxy_enabled": false,
-  "proxy_login": "Username1",
-  "proxy_password": "Pass2",
-  "proxy_gateway": "127.0.0.2",
-  "proxy_gateway_port": 12344,
   "cookie_key": "655A6F61795598A5B55C71D6C2BB17983AA38F6C8418DBCAB9572660E6567DA6",
+  "proxy": {
+    "enabled": true,
+    "login": "Username1",
+    "password": "Pass2",
+    "gateway": "127.0.0.2",
+    "gateway_port": 12344
+  },
   "network_interfaces": {
     "collector_ethernet": "en0",
     "collector_wifi": "wlan0",
