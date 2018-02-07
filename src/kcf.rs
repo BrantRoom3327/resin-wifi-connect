@@ -283,7 +283,7 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::
     Ok(())
 }
 
-pub fn set_config(req: &mut Request) -> IronResult<Response> {
+pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
 
     let options = match collect_set_config_options(req) {
         Ok(opt) => opt,
@@ -336,12 +336,13 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     }
 
     if options.proxy.enabled {
-        config_data.proxy = options.proxy;
+        config_data.proxy = options.proxy.clone();
     }
 
     // if we get this far, update the configuration, it was successful.
     config_data.cloud_storage_enabled = options.cloud_storage_enabled;
     config_data.network_configuration_type = options.network_configuration_type;
+    config_data.proxy.enabled = options.proxy.enabled;
 
     //
     // Update the sd collector xml file
@@ -365,7 +366,7 @@ pub fn set_config(req: &mut Request) -> IronResult<Response> {
     Ok(Response::with((status::Found, Redirect(url.clone()))))
 }
 
-pub fn get_config(req: &mut Request) -> IronResult<Response> {
+pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
 
     let headers = req.headers.to_string();
     let mut cookie_str = String::new();
@@ -409,7 +410,7 @@ pub fn get_config(req: &mut Request) -> IronResult<Response> {
     Ok(resp)
 }
 
-pub fn do_auth(req: &mut Request) -> IronResult<Response> {
+pub fn http_route_do_auth(req: &mut Request) -> IronResult<Response> {
 
     let http_post_auth = match collect_do_auth_options(req) {
         Ok(options) => options,
@@ -437,11 +438,20 @@ pub fn do_auth(req: &mut Request) -> IronResult<Response> {
     Ok(resp)
 }
 
-pub fn get_status(req: &mut Request) -> IronResult<Response> {
+pub fn http_route_get_status(req: &mut Request) -> IronResult<Response> {
 
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
+
+    // re-read the configuration here, it probably changed.  The kcf data will be stale at this
+    // point.  We could consider repopulating the data if we needed to but do it in set_config
+    // instead.
+    let config_data = match load_diagnostics_config_file(&kcf.config_file_path) {
+        Ok(data) => data,
+        Err(e) => panic!("Failed to read configuration file -> {}! e={:?}\n", kcf.config_file_path, e),
+    };
+
     let mut resp = Response::new();
-    resp.set_mut(Template::new(STATUS_TEMPLATE, kcf.config_data)).set_mut(status::Ok);
+    resp.set_mut(Template::new(STATUS_TEMPLATE, config_data)).set_mut(status::Ok);
     Ok(resp)
 }
 

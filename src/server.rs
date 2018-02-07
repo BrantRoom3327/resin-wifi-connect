@@ -195,10 +195,10 @@ pub fn start_server(
     router.post("/connect", connect, "connect");
 
     // kcf routes
-    router.get(ROUTE_GET_CONFIG, get_config, "getconfig");
-    router.get(ROUTE_SHOW_STATUS, get_status, "showstatus");
-    router.post(ROUTE_AUTH, do_auth, "auth");
-    router.post(ROUTE_SET_CONFIG, set_config, "setconfig");
+    router.get(ROUTE_GET_CONFIG, http_route_get_config, "getconfig");
+    router.get(ROUTE_SHOW_STATUS, http_route_get_status, "showstatus");
+    router.post(ROUTE_AUTH, http_route_do_auth, "auth");
+    router.post(ROUTE_SET_CONFIG, http_route_set_config, "setconfig");
     // end kcf routes
 
     let mut assets = Mount::new();
