@@ -1,7 +1,7 @@
 [connection]
 id=my-ethernet
 type=ethernet
-interface-name=en0
+interface-name={{adapter_name}}
 permissions=
 secondaries=
 
@@ -9,10 +9,8 @@ secondaries=
 mac-address-blacklist=
 
 [ipv4]
-address1=192.168.1.149/24
-dns=[8.8.8.8, ]
 dns-search=
-method=manual
+method=auto
 
 [ipv6]
 addr-gen-mode=stable-privacy

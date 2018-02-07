@@ -220,7 +220,10 @@ pub fn start_server(
     // handlebar style templates
     let mut hbse = HandlebarsEngine::new();
 
-    //path for http templates.
+    // FIXME: Load the template dir into the runtime data.  We can go after the templates in a less
+    // directory known way.
+    //
+    //path for templates.
     let template_path = ui_directory.to_str().unwrap().to_string() + TEMPLATE_DIR;
     hbse.add(Box::new(DirectorySource::new(PathBuf::from(template_path), PathBuf::from(".hbs"))));
 

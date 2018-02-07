@@ -1,7 +1,7 @@
 [connection]
 id=my-ethernet
 type=ethernet
-interface-name=en0
+interface-name=eth1
 permissions=
 secondaries=
 
@@ -9,8 +9,8 @@ secondaries=
 mac-address-blacklist=
 
 [ipv4]
-address1=192.168.1.149/24
-dns=[8.8.8.8, ]
+address1=192.168.151.100/24
+dns=[]
 dns-search=
 method=manual
 

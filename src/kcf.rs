@@ -32,10 +32,13 @@ pub const NO_HOTSPOT_SERVER_PORT: i32 = 8080;
 //templates for network configurations written to disk
 pub const TEMPLATE_DIR: &str = "/templates/";
 
+//TODO: Look for these files on startup.
 // templates for ethernet configuration file writes
 pub const ETHERNET_STATIC_SETTINGS_TEMPLATE: &str = "./ui/templates/ethernet-setup-static.hbs";
 pub const ETHERNET_DISABLE_TEMPLATE: &str = "./ui/templates/ethernet-disable.hbs";
-pub const WIFI_SETTINGS_TEMPLATE: &str = "./ui/templates/wifi-network-config.hbs";
+pub const ETHERNET_DHCP_ENABLE_TEMPLATE: &str = "./ui/templates/ethernet-dhcp-enable.hbs";
+pub const WIFI_DHCP_ENABLE_TEMPLATE: &str = "./ui/templates/wifi-dhcp-enable.hbs";
+pub const WIFI_DISABLE_TEMPLATE: &str = "./ui/templates/wifi-disable.hbs";
 
 //http templates for webpages
 pub const HTTP_CONFIG_TEMPLATE: &str = "config";
@@ -403,19 +406,19 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     let wifi_settings = NetworkSettings::new(config_data.network_interfaces.collector_wifi.clone());
 
     // setup ethernet adapter with new settings in config file.
-    if configure_system_network_settings(
+    match configure_system_network_settings(
         &validated_ethernet_settings,
         &wifi_settings,
         &static_streaming_settings,
         &config_data.output_files.collector_ethernet,
         &config_data.output_files.collector_wifi,
-        &config_data.output_files.static_streaming_ethernet,
-    ).is_err()
+        &config_data.output_files.static_streaming_ethernet,)
     {
-        return Err(IronError::new(
-            io::Error::new(InvalidData, format!("Couldn't configure network settings!")),
-            status::InternalServerError,
-        ));
+        Ok(()) => (),
+        Err(e) => {
+            println!("configure_system_network_settings() Error -> {:?}", e);
+            return Err(IronError::new(e, status::InternalServerError));
+        },
     }
 
     //
@@ -487,7 +490,7 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
 
     match validate_cookie(kcf.config_data.cookie_key.as_bytes(), &c) {
-        Ok(_) => (),
+        Ok(()) => (),
         Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     }
 
@@ -760,7 +763,7 @@ fn validate_network_settings(
 fn configure_system_network_settings(
     ethernet_settings: &NetworkSettings,
     wifi_settings: &NetworkSettings,
-    static_streaming_ethernet: &NetworkSettings,
+    static_streaming_ethernet_settings: &NetworkSettings,
     ethernet_output_file: &str,
     wifi_output_file: &str,
     static_streaming_ethernet_output_file: &str)
@@ -769,26 +772,50 @@ fn configure_system_network_settings(
     // FIXME: can we use the handlebars template engine from the http server?
     println!("configure_network_settings! ethernet settings dhcp {} wifi dhcp {}", ethernet_settings.dhcp_enabled, wifi_settings.dhcp_enabled);
 
-    if ethernet_settings.dhcp_enabled {
-        //configure for ethernet dhcp, wifi off
-    } else if wifi_settings.dhcp_enabled {
-        // configure for wifi dhcp enable, ethernet static (off)
-    } else {
+    // we don't have ACID transactions here so if something fails, might need a way to revert the
+    // previous file.  Moving the old out of the way would do it.
 
+    if ethernet_settings.dhcp_enabled { //ethernet dhcp, wifi off
+        //ethernet dhcp
+        match write_network_settings(ethernet_settings, ETHERNET_DHCP_ENABLE_TEMPLATE, ethernet_output_file) {
+            Ok(()) => (),
+            Err(e) => return Err(e),
+        }
+        //wifi disable
+        match write_network_settings(wifi_settings, WIFI_DISABLE_TEMPLATE, wifi_output_file) {
+            Ok(()) => (),
+            Err(e) => return Err(e),
+        }
+    } else if wifi_settings.dhcp_enabled { //wifi dhcp, ethernet on but not routed
+        // wifi dhcp enable
+        match write_network_settings(wifi_settings, WIFI_DHCP_ENABLE_TEMPLATE, wifi_output_file) {
+            Ok(()) => (),
+            Err(e) => return Err(e),
+        }
+        // ethernet not routed
+        match write_network_settings(ethernet_settings, ETHERNET_DISABLE_TEMPLATE, ethernet_output_file) {
+            Ok(()) => (),
+            Err(e) => return Err(e),
+        }
+    } else {
         //write ethernet static setup
         match write_network_settings(ethernet_settings, ETHERNET_STATIC_SETTINGS_TEMPLATE, ethernet_output_file) {
             Ok(()) => (),
-            Err(e) => {
-                println!("Failed to write static ethernet settings to file, e => {}", e);
-                return Err(e);
-            },
+            Err(e) => return Err(e),
         }
-
-        // FIXME: write out wifi to be disabled
+        //wifi disable
+        match write_network_settings(wifi_settings, WIFI_DISABLE_TEMPLATE, wifi_output_file) {
+            Ok(()) => (),
+            Err(e) => return Err(e),
+        }
     }
 
-    // FIXME: always write out the ethernet static setup for the static nic
-    //write_network_settings(static_streaming_ethernet, ETHERNET_STATIC_SETTINGS_TEMPLATE, static_streaming_ethernet_output_file);
+    //always write the static network settings out. (eth1 or similar)
+    match write_network_settings(static_streaming_ethernet_settings, ETHERNET_STATIC_SETTINGS_TEMPLATE, 
+                                 static_streaming_ethernet_output_file) {
+        Ok(()) => (),
+        Err(e) => return Err(e),
+    }
 
     return Ok(());
 }
@@ -813,7 +840,7 @@ fn write_network_settings(settings: &NetworkSettings, template_path: &str, outpu
     if write_file_contents(&t.to_string(), output_file, true).is_err() {
         return Err(io::Error::new(
             InvalidData,
-            format!("Failed to write {}", output_file),
+            format!("Failed to write {} for network interface {:?}", output_file, settings.adapter_name),
         ));
     }
 
