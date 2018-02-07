@@ -5,10 +5,10 @@ use std::net::Ipv4Addr;
 use regex::Regex;
 use std::str::FromStr;
 use iron::modifiers::Redirect;
-use cookie::{CookieJar, Cookie, SameSite};
-use iron::{Request, Response, IronResult, status, IronError, Url};
+use cookie::{Cookie, CookieJar, SameSite};
+use iron::{status, IronError, IronResult, Request, Response, Url};
 use std::fs::OpenOptions;
-use std::io::{Write, Read, Error, ErrorKind};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::io;
 use serde_json;
 use std::fs::File;
@@ -16,24 +16,30 @@ use std::fmt;
 use iron::Set;
 use hbs::Template;
 use std::io::ErrorKind::InvalidData;
-use server::{collect_set_config_options, collect_do_auth_options, get_kcf_runtime_data};
+use server::{collect_do_auth_options, collect_set_config_options, get_kcf_runtime_data};
 use num::FromPrimitive;
 use handlebars::Handlebars;
 use serde_json::Value;
 
 #[cfg(target_os = "linux")]
-use linux::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
+use linux::{get_dns_entries, get_gateway_for_adapter, get_netmask_for_adapter};
 
 #[cfg(target_os = "macos")]
-use macos::{get_gateway_for_adapter, get_netmask_for_adapter, get_dns_entries};
+use macos::{get_dns_entries, get_gateway_for_adapter, get_netmask_for_adapter};
 
-// this is an alias for public/config.hbs as that is handlebar style naming, but the extensions are stripped for runtime
 pub const NO_HOTSPOT_SERVER_PORT: i32 = 8080;
+
+//templates for network configurations written to disk
 pub const TEMPLATE_DIR: &str = "/templates/";
-pub const CONFIG_TEMPLATE: &str = "config";
-pub const STATUS_TEMPLATE: &str = "status";
-pub const ETHERNET_SETTINGS_TEMPLATE: &str = "./ui/templates/ethernet-network-config.hbs";
+
+// templates for ethernet configuration file writes
+pub const ETHERNET_STATIC_SETTINGS_TEMPLATE: &str = "./ui/templates/ethernet-setup-static.hbs";
+pub const ETHERNET_DISABLE_TEMPLATE: &str = "./ui/templates/ethernet-disable.hbs";
 pub const WIFI_SETTINGS_TEMPLATE: &str = "./ui/templates/wifi-network-config.hbs";
+
+//http templates for webpages
+pub const HTTP_CONFIG_TEMPLATE: &str = "config";
+pub const HTTP_STATUS_TEMPLATE: &str = "status";
 
 //defaults for config not given on the commandline
 pub const DEFAULT_HOTSPOT_INTERFACE: &str = "wlan0";
@@ -60,8 +66,8 @@ pub const COOKIE_VALUE: &str = "lemonShortbread";
 enum_from_primitive! {
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
     pub enum NetworkCfgType {
-        Ethernet_DHCP = 0,
-        Ethernet_Static = 1,
+        Ethernet_Static = 0,
+        Ethernet_DHCP = 1,
         Wifi_DHCP = 2,
         Invalid = 3,
     }
@@ -75,7 +81,7 @@ fn merge(a: &mut Value, b: Value) {
             for (k, v) in b {
                 merge(a.entry(k).or_insert(Value::Null), v);
             }
-        }
+        },
         (a, b) => *a = b,
     }
 }
@@ -91,31 +97,42 @@ pub struct NetworkSettings {
 }
 
 impl NetworkSettings {
-    pub fn new(adapter: String) -> NetworkSettings {
+    pub fn new(adapter_name: String) -> NetworkSettings {
         NetworkSettings {
-            adapter_name: adapter, 
+            adapter_name,
             dhcp_enabled: false,
             ip_address: "0.0.0.0".parse().unwrap(),
             netmask: "0.0.0.0".parse().unwrap(),
             gateway: "0.0.0.0".parse().unwrap(),
-            dns: Vec::new()
+            dns: Vec::new(),
+        }
+    }
+    // used to grab the static streaming nic settings that never change.  For now.
+    pub fn get_static_streaming_settings(adapter_name: String) -> NetworkSettings {
+        NetworkSettings {
+            adapter_name,
+            dhcp_enabled: false,
+            ip_address: "192.168.151.100".parse().unwrap(),
+            netmask: "255.255.255.0".parse().unwrap(),
+            gateway: "192.168.151.100".parse().unwrap(),
+            dns: Vec::new(),
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NetworkInterfaces {
-    pub collector_ethernet: String,  //ethernet for upstream to cloud.
-    pub collector_wifi: String,      //wifi for upstream to cloud
-    pub static_streaming_ethernet: String //data interface with static address. doesn't changed and used in streaming data internal.
+    pub collector_ethernet: String, //ethernet for upstream to cloud.
+    pub collector_wifi: String,     //wifi for upstream to cloud
+    pub static_streaming_ethernet: String, //unchanging static addressed interface for streaming
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OutputFiles {
-    pub collector_ethernet: String,         //conf file for the collector_ethernet interface
-    pub collector_wifi: String,             //conf file for the collector_wifi interface
-    pub static_streaming_ethernet: String,  //conf file for the static_streaming_ethernet interface
-    pub collector_xml_file: String          //conf file read by sd collector to load proxy and cloud settings.
+    pub collector_ethernet: String, //conf file for the collector_ethernet interface
+    pub collector_wifi: String,     //conf file for the collector_wifi interface
+    pub static_streaming_ethernet: String, //conf file for the static_streaming_ethernet interface
+    pub collector_xml_file: String, //conf file read by collector
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -132,8 +149,8 @@ pub struct SmartDiagnosticsConfig {
     // cloud storage settings
     pub cloud_storage_enabled: bool,
     pub data_destination_url: String,
-    pub network_configuration_type: u8,  //at runtime a NetworkCfgType
-    pub cookie_key: String, // master key used to generate cookie hashes.
+    pub network_configuration_type: u8, //at runtime a NetworkCfgType
+    pub cookie_key: String,             // master key used to generate cookie hashes.
 
     pub proxy: ProxySettings,
     pub network_interfaces: NetworkInterfaces,
@@ -175,7 +192,7 @@ pub struct Auth {
 pub struct RuntimeData {
     pub http_server_address: String,
     //config
-    pub config_file_path: String, 
+    pub config_file_path: String,
     pub config_data: SmartDiagnosticsConfig,
     //auth
     pub auth_file_path: String,
@@ -190,7 +207,7 @@ impl fmt::Display for SmartDiagnosticsConfig {
 
 pub fn create_cookie(cookie_key: &[u8]) -> String {
     if cookie_key.len() != 64 {
-        panic!("create_cookie: The cookie master key is invalid at runtime!  This shouldn't happen!\n\n");
+        panic!("create_cookie: The cookie master key is invalid at runtime!\n\n");
     }
     //let key = Key::from_master(cookie_key);
     let mut jar = CookieJar::new();
@@ -201,9 +218,9 @@ pub fn create_cookie(cookie_key: &[u8]) -> String {
        // .secure(true)
         .http_only(true)
         .finish();
-  
+
     cookie.set_same_site(SameSite::Strict);
-    
+
     //jar.private(&key).add(cookie);
     jar.add(cookie);
     jar.get(COOKIE_NAME).unwrap().to_string()
@@ -212,7 +229,7 @@ pub fn create_cookie(cookie_key: &[u8]) -> String {
 //TODO: Add cookie secure and database
 pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> Result<(), io::Error> {
     if cookie_key.len() != 64 {
-        panic!("validate_cookie: The cookie master key is invalid at runtime!  This shouldn't happen!\n\n");
+        panic!("validate_cookie: The cookie master key is invalid at runtime!\n\n");
     }
 
     let (name, value) = cookie.name_value();
@@ -225,39 +242,84 @@ pub fn validate_cookie<'a, 'b>(cookie_key: &'a [u8], cookie: &'b Cookie) -> Resu
 }
 
 // instead of wiping the line, wipe the data between begin and end tags and insert new.
-pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::Error> {
-
+pub fn update_sd_collector_xml(cfg: &SmartDiagnosticsConfig) -> Result<(), io::Error> {
     let mut xml_data = match load_file_as_string(&cfg.output_files.collector_xml_file) {
         Ok(xml) => xml,
-        Err(e) => return Err(io::Error::new(InvalidData, format!("Could not load -> {} e={:?}", cfg.output_files.collector_xml_file, e))),
+        Err(e) => {
+            return Err(io::Error::new(
+                InvalidData,
+                format!(
+                    "Could not load -> {} e={:?}",
+                    cfg.output_files.collector_xml_file, e
+                ),
+            ))
+        },
     };
 
     let prometheus_start = match find_offset_in_string(&xml_data, PROMETHEUS_TAG_START) {
         Some(start) => start + PROMETHEUS_TAG_START.to_string().len(),
-        None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROMETHEUS_TAG_START.to_string(), cfg.output_files.collector_xml_file))),
+        None => {
+            return Err(io::Error::new(
+                InvalidData,
+                format!(
+                    "Could not load find {} tag in {}",
+                    PROMETHEUS_TAG_START.to_string(),
+                    cfg.output_files.collector_xml_file
+                ),
+            ))
+        },
     };
 
     let prometheus_end = match find_offset_in_string(&xml_data, PROMETHEUS_TAG_END) {
         Some(end) => end,
-        None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROMETHEUS_TAG_END.to_string(), cfg.output_files.collector_xml_file))),
+        None => {
+            return Err(io::Error::new(
+                InvalidData,
+                format!(
+                    "Could not load find {} tag in {}",
+                    PROMETHEUS_TAG_END.to_string(),
+                    cfg.output_files.collector_xml_file
+                ),
+            ))
+        },
     };
 
-    let _ : String = xml_data.drain(prometheus_start..prometheus_end).collect(); //drain bytes
-    
+    let _: String = xml_data.drain(prometheus_start..prometheus_end).collect(); //drain bytes
+
     //now inject the data after the start tag.
     xml_data.insert_str(prometheus_start, &cfg.data_destination_url);
 
     let proxy_settings_start = match find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_START) {
         Some(start) => start + PROXYSETTINGS_TAG_START.to_string().len(),
-        None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROXYSETTINGS_TAG_START.to_string(), cfg.output_files.collector_xml_file))),
+        None => {
+            return Err(io::Error::new(
+                InvalidData,
+                format!(
+                    "Could not load find {} tag in {}",
+                    PROXYSETTINGS_TAG_START.to_string(),
+                    cfg.output_files.collector_xml_file
+                ),
+            ))
+        },
     };
 
     let proxy_settings_end = match find_offset_in_string(&xml_data, PROXYSETTINGS_TAG_END) {
         Some(end) => end,
-        None => return Err(io::Error::new(InvalidData, format!("Could not load find {} tag in {}", PROXYSETTINGS_TAG_END.to_string(), cfg.output_files.collector_xml_file))),
+        None => {
+            return Err(io::Error::new(
+                InvalidData,
+                format!(
+                    "Could not load find {} tag in {}",
+                    PROXYSETTINGS_TAG_END.to_string(),
+                    cfg.output_files.collector_xml_file
+                ),
+            ))
+        },
     };
 
-    let _drained_of_settings: String = xml_data.drain(proxy_settings_start..proxy_settings_end).collect();
+    let _drained_of_settings: String = xml_data
+        .drain(proxy_settings_start..proxy_settings_end)
+        .collect();
 
     // now inject the data, starting at the end of the start tag
     let collector_settings = SDCollectoProxySettings {
@@ -268,23 +330,36 @@ pub fn update_sd_collector_xml(cfg : &SmartDiagnosticsConfig) -> Result<(), io::
         User: cfg.proxy.login.clone(),
         Password: cfg.proxy.password.clone(),
     };
-    
+
     let collector_string = match serde_json::to_string(&collector_settings) {
         Ok(json) => json,
-        Err(e) => return Err(io::Error::new(InvalidData, format!("Failed to serialize data to xml! file {} err {}", cfg.output_files.collector_xml_file, e))),
+        Err(e) => {
+            return Err(io::Error::new(
+                InvalidData,
+                format!(
+                    "Failed to serialize data to xml! file {} err {}",
+                    cfg.output_files.collector_xml_file, e
+                ),
+            ))
+        },
     };
 
     xml_data.insert_str(proxy_settings_start, &collector_string);
 
     if write_file_contents(&xml_data, &cfg.output_files.collector_xml_file, true).is_err() {
-        return Err(io::Error::new(InvalidData, format!("Failed to write to {}!", cfg.output_files.collector_xml_file)));
+        return Err(io::Error::new(
+            InvalidData,
+            format!(
+                "Failed to write to {}!",
+                cfg.output_files.collector_xml_file
+            ),
+        ));
     }
 
     Ok(())
 }
 
 pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
-
     let options = match collect_set_config_options(req) {
         Ok(opt) => opt,
         Err(e) => return Err(e),
@@ -296,19 +371,25 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     let mut config_data = kcf.config_data.clone();
 
     // make sure the network configuration type gets validated here and type converted
-    let network_configuration_type = match get_network_cfg_type(options.network_configuration_type) {
+    let network_configuration_type = match get_network_cfg_type(options.network_configuration_type)
+    {
         Some(net) => net,
-        None => return Err(IronError::new(io::Error::new(InvalidData, format!("Invalid network configuration value")), status::InternalServerError)),
+        None => {
+            return Err(IronError::new(
+                io::Error::new(InvalidData, format!("Invalid network configuration value")),
+                status::InternalServerError,
+            ))
+        },
     };
 
     let validated_ethernet_settings = match validate_network_settings(
-            &network_configuration_type, 
-            &config_data.network_interfaces.collector_ethernet,
-            &options.ethernet_ip_address, 
-            &options.ethernet_subnet_mask, 
-            &options.ethernet_gateway,
-            &options.ethernet_dns)
-    {
+        &network_configuration_type,
+        &config_data.network_interfaces.collector_ethernet,
+        &options.ethernet_ip_address,
+        &options.ethernet_subnet_mask,
+        &options.ethernet_gateway,
+        &options.ethernet_dns,
+    ) {
         Ok(settings) => settings,
         Err(err) => {
             println!("Network settings validation failed!");
@@ -316,15 +397,25 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
         },
     };
 
-    // FIXME: use a default
-    let wifi_settings = NetworkSettings::new("wlan0".to_string());
+    let static_streaming_settings = NetworkSettings::get_static_streaming_settings(
+            config_data.network_interfaces.static_streaming_ethernet.clone());
+
+    let wifi_settings = NetworkSettings::new(config_data.network_interfaces.collector_wifi.clone());
 
     // setup ethernet adapter with new settings in config file.
-    if configure_system_network_settings(&validated_ethernet_settings, &wifi_settings, 
-                                         &config_data.output_files.collector_ethernet,
-                                         &config_data.output_files.collector_wifi).is_err() {
-        println!("Failed to configure network interface files");
-        return Err(IronError::new(io::Error::new(InvalidData, format!("Couldn't configure network settings!")), status::InternalServerError));
+    if configure_system_network_settings(
+        &validated_ethernet_settings,
+        &wifi_settings,
+        &static_streaming_settings,
+        &config_data.output_files.collector_ethernet,
+        &config_data.output_files.collector_wifi,
+        &config_data.output_files.static_streaming_ethernet,
+    ).is_err()
+    {
+        return Err(IronError::new(
+            io::Error::new(InvalidData, format!("Couldn't configure network settings!")),
+            status::InternalServerError,
+        ));
     }
 
     //
@@ -348,7 +439,10 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     // Update the sd collector xml file
     //
     if update_sd_collector_xml(&config_data).is_err() {
-        return Err(IronError::new(io::Error::new(InvalidData, format!("Unable to update collector XML file!")), status::InternalServerError));
+        return Err(IronError::new(
+            io::Error::new(InvalidData, format!("Unable to update collector XML file!")),
+            status::InternalServerError,
+        ));
     }
 
     //
@@ -367,7 +461,6 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
 }
 
 pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
-
     let headers = req.headers.to_string();
     let mut cookie_str = String::new();
     let COOKIE_TAG = "Cookie:";
@@ -380,10 +473,13 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
         }
     }
 
-    // FIXME: we need a page to send the user when things go wrong.  And display status 
+    // FIXME: we need a page to send the user when things go wrong.  And display status
     // with the normal layout as well as a link back to the login page.
     if cookie_str.len() < COOKIE_TAG.len() {
-        return Ok(Response::with((status::Unauthorized, "Not authorized.  Do you have cookies enabled for this site?")))
+        return Ok(Response::with((
+            status::Unauthorized,
+            "Not authorized.  Do you have cookies enabled for this site?",
+        )));
     }
 
     let c = Cookie::parse(&cookie_str[COOKIE_TAG.len()..]).unwrap();
@@ -395,10 +491,16 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
         Err(err) => return Err(IronError::new(err, status::InternalServerError)),
     }
 
-    let net_settings = match get_network_settings(&kcf.config_data.network_interfaces.collector_ethernet) {
-        Some(settings) => settings,
-        None => return Ok(Response::with((status::Unauthorized, "Failed to acquire network settings from ethernet adapter."))),
-    };
+    let net_settings =
+        match get_network_settings(&kcf.config_data.network_interfaces.collector_ethernet) {
+            Some(settings) => settings,
+            None => {
+                return Ok(Response::with((
+                    status::Unauthorized,
+                    "Failed to acquire network settings from ethernet adapter.",
+                )))
+            },
+        };
 
     //inject the live network settings into the configuration we have stored and use
     //the merged output for the template render.
@@ -406,12 +508,12 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
     merge(&mut cfg_json, json!(net_settings));
 
     let mut resp = Response::new();
-    resp.set_mut(Template::new(CONFIG_TEMPLATE, cfg_json)).set_mut(status::Ok);
+    resp.set_mut(Template::new(HTTP_CONFIG_TEMPLATE, cfg_json))
+        .set_mut(status::Ok);
     Ok(resp)
 }
 
 pub fn http_route_do_auth(req: &mut Request) -> IronResult<Response> {
-
     let http_post_auth = match collect_do_auth_options(req) {
         Ok(options) => options,
         Err(e) => return Err(e),
@@ -439,7 +541,6 @@ pub fn http_route_do_auth(req: &mut Request) -> IronResult<Response> {
 }
 
 pub fn http_route_get_status(req: &mut Request) -> IronResult<Response> {
-
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
 
     // re-read the configuration here, it probably changed.  The kcf data will be stale at this
@@ -447,11 +548,15 @@ pub fn http_route_get_status(req: &mut Request) -> IronResult<Response> {
     // instead.
     let config_data = match load_diagnostics_config_file(&kcf.config_file_path) {
         Ok(data) => data,
-        Err(e) => panic!("Failed to read configuration file -> {}! e={:?}\n", kcf.config_file_path, e),
+        Err(e) => panic!(
+            "Failed to read configuration file -> {}! e={:?}\n",
+            kcf.config_file_path, e
+        ),
     };
 
     let mut resp = Response::new();
-    resp.set_mut(Template::new(STATUS_TEMPLATE, config_data)).set_mut(status::Ok);
+    resp.set_mut(Template::new(HTTP_STATUS_TEMPLATE, config_data))
+        .set_mut(status::Ok);
     Ok(resp)
 }
 
@@ -473,13 +578,14 @@ pub fn get_network_settings(adapter_name: &str) -> Option<NetworkSettings> {
         None => return None,
     };
 
-    Some(NetworkSettings{
-        adapter_name: adapter_name.to_string(), 
+    Some(NetworkSettings {
+        adapter_name: adapter_name.to_string(),
         dhcp_enabled: false,
         ip_address,
         netmask,
         gateway,
-        dns})
+        dns,
+    })
 }
 
 // get ip and netmask for the adapter
@@ -490,7 +596,8 @@ pub fn get_ip_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
         .expect("failed to execute `ifconfig`");
 
     lazy_static! {
-        static ref IP_RE: Regex =  Regex::new(r#"(?m)^.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+        static ref IP_RE: Regex =  Regex::new(
+            r#"(?m)^.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
     }
 
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -529,22 +636,38 @@ pub fn load_file_as_string(file_path: &str) -> Result<String, io::Error> {
 
 pub fn write_file_contents(data: &str, file_path: &str, create_new_file: bool) -> io::Result<()> {
     let mut f = if create_new_file {
-        OpenOptions::new().write(true).truncate(true).create(true).open(file_path)?
+        OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(file_path)?
     } else {
-        OpenOptions::new().write(true).truncate(true).open(file_path)?
+        OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(file_path)?
     };
 
     let bytes_out = f.write(data.as_bytes())?;
     let file_len = data.as_bytes().len();
     if bytes_out != file_len {
-        let err_str = format!("Could not write all the data out, wrote {} of {} bytes to {}", bytes_out, file_len, file_path);
-        return Err(io::Error::new(InvalidData, err_str))
+        let err_str = format!(
+            "Could not write all the data out, wrote {} of {} bytes to {}",
+            bytes_out, file_len, file_path
+        );
+        return Err(io::Error::new(InvalidData, err_str));
     }
     Ok(())
 }
 
-pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig, file_path: &str) -> io::Result<()> {
-    let mut f = OpenOptions::new().write(true).truncate(true).open(file_path)?;
+pub fn write_diagnostics_config(
+    config: &SmartDiagnosticsConfig,
+    file_path: &str,
+) -> io::Result<()> {
+    let mut f = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(file_path)?;
     let data = match serde_json::to_string_pretty(&config) {
         Ok(computer) => computer,
         Err(e) => return Err(io::Error::new(InvalidData, e)),
@@ -554,7 +677,7 @@ pub fn write_diagnostics_config(config: &SmartDiagnosticsConfig, file_path: &str
 }
 
 pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
-    let haystack_len = haystack.len(); 
+    let haystack_len = haystack.len();
     let offset = haystack.find(needle).unwrap_or(haystack_len);
     if offset != haystack_len {
         return Some(offset);
@@ -563,9 +686,14 @@ pub fn find_offset_in_string(haystack: &str, needle: &str) -> Option<usize> {
     }
 }
 
-fn validate_network_settings(network_configuration_type: &NetworkCfgType, adapter_name: &str, ip_address: &str, netmask: &str, gateway: &str, dns: &str)
-    -> Result<NetworkSettings, io::Error> 
- {
+fn validate_network_settings(
+    network_configuration_type: &NetworkCfgType,
+    adapter_name: &str,
+    ip_address: &str,
+    netmask: &str,
+    gateway: &str,
+    dns: &str,
+) -> Result<NetworkSettings, io::Error> {
     // we now have network_configuration_type:
     // * Eth0 static
     // * Eth0 dhcp
@@ -576,24 +704,22 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, adapte
         let mut dhcp_settings = NetworkSettings::new(adapter_name.to_string());
         dhcp_settings.dhcp_enabled = true;
         Ok(dhcp_settings)
-
     } else if network_configuration_type == &NetworkCfgType::Ethernet_Static {
-
         let valid_ip_address = match Ipv4Addr::from_str(&ip_address) {
             Ok(eth) => eth,
             Err(_) => return Err(Error::new(ErrorKind::Other, "Failed to parse ip address!")),
         };
-    
+
         let valid_netmask = match Ipv4Addr::from_str(&netmask) {
             Ok(nm) => nm,
             Err(_) => return Err(Error::new(ErrorKind::Other, "Failed to parse subnet mask!")),
         };
-    
+
         let valid_gateway = match Ipv4Addr::from_str(&gateway) {
             Ok(gw) => gw,
             Err(_) => return Err(Error::new(ErrorKind::Other, "Failed to parse gateway!")),
         };
-    
+
         let vec_dns: Vec<&str> = dns.split(',').collect();
         let mut valid_dns_entries = Vec::new();
         for v in vec_dns {
@@ -606,14 +732,14 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, adapte
         valid_dns_entries.dedup();
 
         // return static setup
-        return Ok(NetworkSettings{
+        return Ok(NetworkSettings {
             adapter_name: adapter_name.to_string(),
             dhcp_enabled: false,
-            ip_address: valid_ip_address, 
+            ip_address: valid_ip_address,
             netmask: valid_netmask,
-            gateway: valid_gateway, 
-            dns: valid_dns_entries});
-
+            gateway: valid_gateway,
+            dns: valid_dns_entries,
+        });
     } else if network_configuration_type == &NetworkCfgType::Wifi_DHCP {
         // here we also want invalid ethernet settings but we want
         // store the last connected SSID for future use when switching back and forth for the user.
@@ -621,44 +747,86 @@ fn validate_network_settings(network_configuration_type: &NetworkCfgType, adapte
         wifi_settings.dhcp_enabled = true;
         Ok(wifi_settings)
     } else {
-        return Err(Error::new(ErrorKind::Other, "validate_network_settings: Invalid Network configuration type!"));
+        return Err(Error::new(
+            ErrorKind::Other,
+            "validate_network_settings: Invalid Network configuration type!",
+        ));
     }
 }
 
 // configure all the network settings in one go.
 // wifi and ethernet.
 // FIXME: Can this be improved to not create new HBS instances?
-fn configure_system_network_settings(ethernet_settings: &NetworkSettings, wifi_settings: &NetworkSettings, 
-                                     ethernet_output_file: &str, wifi_output_file: &str) -> Result<(), io::Error>
-{
-    let template_form = match load_file_as_string(ETHERNET_SETTINGS_TEMPLATE) {
-        Ok(t) => t,
-        Err(e) => return Err(io::Error::new(InvalidData, format!("Could not load -> file, err {:?}", e))),
-    };
+fn configure_system_network_settings(
+    ethernet_settings: &NetworkSettings,
+    wifi_settings: &NetworkSettings,
+    static_streaming_ethernet: &NetworkSettings,
+    ethernet_output_file: &str,
+    wifi_output_file: &str,
+    static_streaming_ethernet_output_file: &str)
+    -> Result<(), io::Error> {
 
-    // register the template. The template string will be verified and compiled.
-    let mut h = Handlebars::new();
-    let source = template_form;
-    assert!(h.register_template_string("t1", source).is_ok());
+    // FIXME: can we use the handlebars template engine from the http server?
+    println!("configure_network_settings! ethernet settings dhcp {} wifi dhcp {}", ethernet_settings.dhcp_enabled, wifi_settings.dhcp_enabled);
 
-    let t = h.render("t1", &ethernet_settings).unwrap();
+    if ethernet_settings.dhcp_enabled {
+        //configure for ethernet dhcp, wifi off
+    } else if wifi_settings.dhcp_enabled {
+        // configure for wifi dhcp enable, ethernet static (off)
+    } else {
 
-    if write_file_contents(&t.to_string(), ethernet_output_file, true).is_err() {
-        return Err(io::Error::new(InvalidData, format!("Failed to write {}", ethernet_output_file)));
+        //write ethernet static setup
+        match write_network_settings(ethernet_settings, ETHERNET_STATIC_SETTINGS_TEMPLATE, ethernet_output_file) {
+            Ok(()) => (),
+            Err(e) => {
+                println!("Failed to write static ethernet settings to file, e => {}", e);
+                return Err(e);
+            },
+        }
+
+        // FIXME: write out wifi to be disabled
     }
 
-    //FIXME: Write out the wifi output file also based on a template
-    
-    return Ok(())
+    // FIXME: always write out the ethernet static setup for the static nic
+    //write_network_settings(static_streaming_ethernet, ETHERNET_STATIC_SETTINGS_TEMPLATE, static_streaming_ethernet_output_file);
+
+    return Ok(());
+}
+
+fn write_network_settings(settings: &NetworkSettings, template_path: &str, output_file: &str)
+    -> Result<(), io::Error>
+{
+    let template_input = match load_file_as_string(template_path) {
+        Ok(t) => t,
+        Err(e) => {
+            return Err(io::Error::new(
+                   InvalidData,
+                format!("Could not load -> file {}, err {:?}", template_path, e),
+            ))
+         },
+    };
+
+    let mut h = Handlebars::new();
+    assert!(h.register_template_string("static", template_input).is_ok());
+    let t = h.render("static", &settings).unwrap();
+
+    if write_file_contents(&t.to_string(), output_file, true).is_err() {
+        return Err(io::Error::new(
+            InvalidData,
+            format!("Failed to write {}", output_file),
+        ));
+    }
+
+    Ok(())
 }
 
 pub fn get_network_cfg_type(value: u8) -> Option<NetworkCfgType> {
-     let network_configuration_type = match NetworkCfgType::from_u8(value) {
+    let network_configuration_type = match NetworkCfgType::from_u8(value) {
         Some(val) => val,
         None => {
             println!("invalid form value for network cfg type!");
             return None;
-        }
+        },
     };
 
     Some(network_configuration_type)

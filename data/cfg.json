@@ -4,8 +4,8 @@
   "network_configuration_type": 0,
   "cookie_key": "655A6F61795598A5B55C71D6C2BB17983AA38F6C8418DBCAB9572660E6567DA6",
   "proxy": {
-    "enabled": true,
-    "login": "Username1",
+    "enabled": false,
+    "login": "Username2",
     "password": "Pass2",
     "gateway": "127.0.0.2",
     "gateway_port": 12344

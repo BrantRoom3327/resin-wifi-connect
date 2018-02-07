@@ -2,7 +2,7 @@
 <SmartDiagnosticsConfiguration>
  <Settings>
    <PrometheusUrl>http://www.yahoo.com</PrometheusUrl>
-   <ProxySettings>{"Enabled":true,"Server":"127.0.0.2","Port":12344,"UseDefaultCredentials":false,"User":"Username1","Password":"Pass2"}</ProxySettings>
+   <ProxySettings>{"Enabled":false,"Server":"127.0.0.2","Port":12344,"UseDefaultCredentials":false,"User":"Username2","Password":"Pass2"}</ProxySettings>
    <NetworkId>1178B3AD</NetworkId>
    <AutoJoinReceiverSubnet>192.168.151.100,255.255.255.0</AutoJoinReceiverSubnet>
  </Settings>

@@ -22,7 +22,7 @@ use {exit, ExitResult};
 use rand::*;
 use std::str;
 use kcf::*;
-use hbs::{HandlebarsEngine, DirectorySource};
+use hbs::{DirectorySource, HandlebarsEngine};
 
 #[derive(Debug)]
 pub struct RequestSharedState {
@@ -140,14 +140,17 @@ pub fn start_server(
     //TODO: Create a function, validate_cookie_key()
 
     //
-    // deserialize SmartDiagnosticsConfig and Auth directly into RunTimeData. 
+    // deserialize SmartDiagnosticsConfig and Auth directly into RunTimeData.
     // use this at runtime to inject configuration state into templates and processing.
     //
     let mut config_data = match load_diagnostics_config_file(&config_file_path) {
         Ok(config) => config,
-        Err(e) => panic!("Failed to read configuration file -> {}! e={:?}\n", config_file_path, e),
+        Err(e) => panic!(
+            "Failed to read configuration file -> {}! e={:?}\n",
+            config_file_path, e
+        ),
     };
-    
+
     let auth_data = match load_auth_file(&auth_file_path) {
         Ok(c) => c,
         Err(e) => panic!("Failed to read auth file -> {} !\n", e),
@@ -155,15 +158,18 @@ pub fn start_server(
 
     // make sure we have a valid cookie seed value.  Needs to be 256 bits.
     // Since its stored as a string we convert 2 chars per string to our 32 bytes of data.
-    if config_data.cookie_key.len() != 64 { // 32 bytes of data.  2 chars per byte in hex.
+    if config_data.cookie_key.len() != 64 {
+        // 32 bytes of data.  2 chars per byte in hex.
         println!("Generating a new cookie creator master key..");
         let mut rng = thread_rng();
         let mut array = vec![0; 8];
         for i in 0..8 {
             array[i] = rng.gen::<u32>();
         }
-        let new_key = format!("{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}",
-            array[0], array[1], array[2], array[3], array[4], array[5], array[6], array[7]);
+        let new_key = format!(
+            "{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}",
+            array[0], array[1], array[2], array[3], array[4], array[5], array[6], array[7]
+        );
 
         println!("New Key -> {} len {}", new_key, new_key.len());
         config_data.cookie_key = new_key;
@@ -185,8 +191,12 @@ pub fn start_server(
         auth_data,
     };
 
-    let request_state = RequestSharedState { 
-        gateway, server_rx, network_tx, exit_tx, kcf
+    let request_state = RequestSharedState {
+        gateway,
+        server_rx,
+        network_tx,
+        exit_tx,
+        kcf,
     };
 
     let mut router = Router::new();
@@ -210,14 +220,22 @@ pub fn start_server(
     // handlebar style templates
     let mut hbse = HandlebarsEngine::new();
 
-    let path = "./".to_string() + ui_directory.to_str().unwrap() + &TEMPLATE_DIR.to_string();
-    let template_path = PathBuf::from(path);
-    hbse.add(Box::new(DirectorySource::new(template_path, PathBuf::from(".hbs"))));
+    //path for http templates.
+    let template_path = ui_directory.to_str().unwrap().to_string() + TEMPLATE_DIR;
+    hbse.add(Box::new(DirectorySource::new(PathBuf::from(template_path), PathBuf::from(".hbs"))));
+
+    //path for network configuration templates.
+    //let network_config_template_path = ui_directory.to_str().unwrap().to_string() + &NETWORK_CONFIG_TEMPLATE_DIR.to_string();
+    //hbse.add(Box::new(DirectorySource::new(PathBuf::from(network_config_template_path), PathBuf::from(".hbs"))));
+
     if let Err(r) = hbse.reload() {
         panic!("{}", r);
     }
 
-    info!("Starting HTTP server on http://{}", http_server_address_clone);
+    info!(
+        "Starting HTTP server on http://{}",
+        http_server_address_clone
+    );
 
     let mut chain = Chain::new(assets);
     chain.link(Write::<RequestSharedState>::both(request_state));
@@ -227,7 +245,11 @@ pub fn start_server(
     if let Err(e) = Iron::new(chain).http(&http_server_address_clone) {
         exit(
             &exit_tx_clone,
-            format!("Cannot start HTTP server on '{}': {}", &http_server_address_clone, e.description()),
+            format!(
+                "Cannot start HTTP server on '{}': {}",
+                &http_server_address_clone,
+                e.description()
+            ),
         );
     }
 }
@@ -323,7 +345,8 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
         login: login,
         password: password,
         gateway: gateway,
-        gateway_port: gateway_port};
+        gateway_port: gateway_port,
+    };
 
     //see NetworkCfgType for the allowed values.
     let network_configuration_type = get_param!(params, "network_configuration_type", u8);
@@ -338,9 +361,18 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
     let ethernet_gateway = get_param!(params, "ethernet_gateway", String);
     let ethernet_dns = get_param!(params, "ethernet_dns", String);
 
-    Ok(SetConfigOptionsFromPost{ cloud_storage_enabled, destination_address, proxy, network_configuration_type, 
-        wifi_ssid, wifi_passphrase, 
-        ethernet_ip_address, ethernet_subnet_mask, ethernet_gateway, ethernet_dns})
+    Ok(SetConfigOptionsFromPost {
+        cloud_storage_enabled,
+        destination_address,
+        proxy,
+        network_configuration_type,
+        wifi_ssid,
+        wifi_passphrase,
+        ethernet_ip_address,
+        ethernet_subnet_mask,
+        ethernet_gateway,
+        ethernet_dns,
+    })
 }
 
 pub fn collect_do_auth_options(req: &mut Request) -> IronResult<Auth> {
@@ -348,7 +380,7 @@ pub fn collect_do_auth_options(req: &mut Request) -> IronResult<Auth> {
     let username = get_param!(params, "username", String);
     let password = get_param!(params, "password", String);
 
-    Ok(Auth {username, password})
+    Ok(Auth { username, password })
 }
 
 pub fn get_kcf_runtime_data(req: &mut Request) -> Result<RuntimeData, IronError> {

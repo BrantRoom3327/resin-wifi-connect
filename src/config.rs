@@ -172,7 +172,6 @@ pub fn get_config() -> Config {
         String::from,
     );
 
-
     let ui_directory = get_ui_directory(matches.value_of("ui-directory"));
 
     Config {

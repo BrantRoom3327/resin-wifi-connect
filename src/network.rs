@@ -38,8 +38,7 @@ struct NetworkCommandHandler {
 }
 
 #[cfg(feature = "no_hotspot")]
-struct NetworkCommandHandler {
-}
+struct NetworkCommandHandler {}
 
 impl NetworkCommandHandler {
     #[cfg(not(feature = "no_hotspot"))]
@@ -86,7 +85,7 @@ impl NetworkCommandHandler {
         let (network_tx, network_rx) = channel();
         Self::spawn_server(config, exit_tx, server_rx, network_tx.clone());
 
-        Ok(NetworkCommandHandler{})
+        Ok(NetworkCommandHandler {})
     }
 
     fn spawn_server(
@@ -136,8 +135,8 @@ impl NetworkCommandHandler {
     fn run(&mut self, exit_tx: &Sender<ExitResult>) {
         #[cfg(not(feature = "no_hotspot"))]
         {
-        let result = self.run_loop();
-        self.stop(exit_tx, result);
+            let result = self.run_loop();
+            self.stop(exit_tx, result);
         }
     }
 
@@ -281,15 +280,15 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
 }
 
 pub fn init_networking() {
-#[cfg(not(feature = "no_hotspot"))]
-{
-    start_network_manager_service();
+    #[cfg(not(feature = "no_hotspot"))]
+    {
+        start_network_manager_service();
 
-    if let Err(err) = delete_access_point_profiles() {
-        error!("Stopping access point failed: {}", err);
-        process::exit(1);
+        if let Err(err) = delete_access_point_profiles() {
+            error!("Stopping access point failed: {}", err);
+            process::exit(1);
+        }
     }
-}
 }
 
 #[cfg(not(feature = "no_hotspot"))]

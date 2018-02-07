@@ -1,5 +1,5 @@
 use std::process::Command;
-use std::net::{Ipv4Addr};
+use std::net::Ipv4Addr;
 use regex::Regex;
 
 pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
@@ -36,7 +36,8 @@ pub fn get_gateway_for_adapter(_adapter: &str) -> Option<Ipv4Addr> {
         .expect("failed to execute `route -n get default`");
 
     lazy_static! {
-        static ref GATEWAY_RE: Regex = Regex::new(r#"(?m).*(gateway: )(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+        static ref GATEWAY_RE: Regex = Regex::new(
+            r#"(?m).*(gateway: )(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
     }
 
     let stdout = String::from_utf8(output.stdout).unwrap();

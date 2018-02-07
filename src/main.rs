@@ -2,26 +2,31 @@
 #![cfg_attr(feature = "clippy", plugin(clippy))]
 
 extern crate clap;
+extern crate cookie;
+#[macro_use]
+extern crate enum_primitive;
 extern crate env_logger;
-extern crate iron;
-#[macro_use] extern crate log;
-extern crate network_manager;
-extern crate params;
-extern crate persistent;
-extern crate router;
-#[macro_use] extern crate serde_json;
-extern crate staticfile;
 extern crate handlebars;
 extern crate handlebars_iron as hbs;
-extern crate cookie;
-extern crate time;
+extern crate iron;
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate log;
+extern crate mount;
+extern crate network_manager;
+extern crate num;
+extern crate params;
+extern crate persistent;
 extern crate rand;
 extern crate regex;
-extern crate mount;
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate enum_primitive;
-extern crate num;
+extern crate router;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate serde_json;
+extern crate staticfile;
+extern crate time;
 
 mod config;
 mod network;
@@ -64,8 +69,10 @@ fn main() {
     });
 
     match exit_rx.recv() {
-        Ok(result) => if let Err(reason) = result {
-            error!("{}", reason);
+        Ok(result) => {
+            if let Err(reason) = result {
+                error!("{}", reason);
+            }
         },
         Err(e) => error!("Exit receiver error: {}", e.description()),
     }

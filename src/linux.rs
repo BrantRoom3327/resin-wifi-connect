@@ -1,12 +1,13 @@
 use std::thread;
 use std::process;
 use std::time::Duration;
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{channel, Sender};
 use std::error::Error;
 use std::process::Command;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use regex::Regex;
-use network_manager::{NetworkManager, Device, DeviceState, DeviceType, Connection, AccessPoint, ConnectionState, ServiceState, Connectivity};
+use network_manager::{AccessPoint, Connection, ConnectionState, Connectivity, Device, DeviceState,
+                      DeviceType, NetworkManager, ServiceState};
 use {exit, ExitResult};
 use config::Config;
 use dnsmasq::start_dnsmasq;
@@ -15,7 +16,8 @@ use kcf::*;
 
 pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
     lazy_static! {
-        static ref NETMASK_RE: Regex = Regex::new(r#"(?m)^.*inet (netmask )?(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+        static ref NETMASK_RE: Regex = Regex::new(
+            r#"(?m)^.*inet (netmask )?(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
     }
 
     let output = Command::new("ifconfig")
@@ -34,7 +36,6 @@ pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
 }
 
 pub fn get_gateway_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
-    //let command = format!("ip route | grep {} | grep default | grep -o -P  '(?<=via ).*(?= dev)'");
     let output = Command::new("ip")
         .arg("route")
         .arg("show")
@@ -42,7 +43,8 @@ pub fn get_gateway_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
         .expect("failed to execute `ifconfig`");
 
     lazy_static! {
-        static ref GATEWAY_RE: Regex = Regex::new(r#"(?m).*(via )(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+        static ref GATEWAY_RE: Regex = Regex::new(
+            r#"(?m).*(via )(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
     }
 
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -62,7 +64,8 @@ pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
         .expect("failed to execute `cat /etc/resolv.conf`");
 
     lazy_static! {
-        static ref GATEWAY_RE: Regex = Regex::new(r#"(?m)^nameserver\s*(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
+        static ref GATEWAY_RE: Regex = Regex::new(
+            r#"(?m)^nameserver\s*(([0-9]*\.){3}[0-9]*).*$"#).unwrap();
     }
     let mut dns_entries = Vec::new();
 
@@ -79,4 +82,3 @@ pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
         None
     }
 }
-
