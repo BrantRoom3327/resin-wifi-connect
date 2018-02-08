@@ -64,7 +64,7 @@
                         </div>
                         <div class="row ethernet_dns col-xs-12">
                             <div class="col-md-4"><label for="ethernet_dns">DNS</label></div>
-                            <p>{{dns}}<p>
+                            <p>{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}</p>
                         </div>
                     </div>
 

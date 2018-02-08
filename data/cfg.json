@@ -1,10 +1,10 @@
 {
   "cloud_storage_enabled": true,
-  "data_destination_url": "http://www.fred.com",
+  "data_destination_url": "http://www.fred2.com",
   "network_configuration_type": 0,
   "cookie_key": "655A6F61795598A5B55C71D6C2BB17983AA38F6C8418DBCAB9572660E6567DA6",
   "proxy": {
-    "enabled": true,
+    "enabled": false,
     "login": "Username4",
     "password": "Pass2",
     "gateway": "127.0.0.2",

@@ -10,7 +10,7 @@ mac-address-blacklist=
 
 [ipv4]
 address1={{ip_address}}/24
-dns={{dns}}
+dns={{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}
 dns-search=
 method=manual
 

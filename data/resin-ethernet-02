@@ -10,7 +10,7 @@ mac-address-blacklist=
 
 [ipv4]
 address1=192.168.151.100/24
-dns=[]
+dns=
 dns-search=
 method=manual
 
