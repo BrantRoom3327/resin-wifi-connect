@@ -16,7 +16,7 @@ use std::fmt;
 use iron::Set;
 use hbs::Template;
 use std::io::ErrorKind::InvalidData;
-use server::{collect_do_auth_options, collect_set_config_options, get_kcf_runtime_data};
+use server::{collect_do_auth_options, collect_set_config_options, get_kcf_runtime_data, inject_to_runtime};
 use num::FromPrimitive;
 use handlebars::Handlebars;
 use serde_json::Value;
@@ -89,7 +89,7 @@ fn merge(a: &mut Value, b: Value) {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NetworkSettings {
     pub adapter_name: String,
     pub dhcp_enabled: bool,
@@ -122,6 +122,31 @@ impl NetworkSettings {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct WifiAPSettings {
+    pub adapter_name: String,
+    pub ssid: String,
+    pub psk: String,
+}
+
+impl WifiAPSettings {
+    pub fn new() -> WifiAPSettings {
+        WifiAPSettings {
+            adapter_name: String::new(),
+            ssid: String::new(),
+            psk: String::new(),
+        }
+    }
+    pub fn init(adapter_name: String, ssid: String, psk: String) -> WifiAPSettings {
+        WifiAPSettings {
+            adapter_name,
+            ssid,
+            psk,
+        }
+    }
+}
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NetworkInterfaces {
@@ -200,6 +225,10 @@ pub struct RuntimeData {
     //auth
     pub auth_file_path: String,
     pub auth_data: Auth,
+
+    //data sent from client, used for display
+    pub ethernet_static_network_settings: NetworkSettings, //used to store ethernet static settings as needed for templating
+    pub wifi_dhcp_network_settings: WifiAPSettings,
 }
 
 impl fmt::Display for SmartDiagnosticsConfig {
@@ -376,6 +405,16 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     config_data.proxy.enabled = options.proxy.enabled;
 
     //
+    // inject the new static ethernet settings into runtime data only if we need it (ethernet
+    // static selected)
+    //
+    match network_configuration_type  {
+        NetworkCfgType::Ethernet_Static => inject_to_runtime(req, validated_ethernet_settings)?,
+        //FIXME: add cfg for wifi settings.
+        _ => (),
+    };
+
+    //
     // Update the sd collector xml file
     //
     if update_sd_collector_xml(&config_data).is_err() {
@@ -484,9 +523,8 @@ pub fn http_route_get_status(req: &mut Request) -> IronResult<Response> {
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
 
     // re-read the configuration here, it probably changed.  The kcf data will be stale at this
-    // point.  We could consider repopulating the data if we needed to but do it in set_config
-    // instead.
-    let config_data = match load_diagnostics_config_file(&kcf.config_file_path) {
+    // point.  We could consider repopulating the data if we needed to but do it in set_config instead.
+    let data_from_cfg_file = match load_diagnostics_config_file(&kcf.config_file_path) {
         Ok(data) => data,
         Err(e) => panic!(
             "Failed to read configuration file -> {}! e={:?}\n",
@@ -494,8 +532,22 @@ pub fn http_route_get_status(req: &mut Request) -> IronResult<Response> {
         ),
     };
 
+    // merge in the network settings that were sent to the server but are not stored
+    // in the cfg file.
+    let mut cfg_json = json!(data_from_cfg_file);
+
+    //only merge in the template data we need based on configuration type.
+    let net_cfg = get_network_cfg_type(kcf.config_data.network_configuration_type);
+    match net_cfg {
+        Ethernet_Static => 
+            merge(&mut cfg_json, json!(kcf.ethernet_static_network_settings)),
+        Wifi_DHCP => 
+            merge(&mut cfg_json, json!(kcf.wifi_dhcp_network_settings)),
+        _ => (),
+    }
+
     let mut resp = Response::new();
-    resp.set_mut(Template::new(HTTP_STATUS_TEMPLATE, config_data))
+    resp.set_mut(Template::new(HTTP_STATUS_TEMPLATE, cfg_json))
         .set_mut(status::Ok);
     Ok(resp)
 }
@@ -688,8 +740,6 @@ fn configure_system_network_settings(
     wifi_output_file: &str,
     static_streaming_ethernet_output_file: &str)
     -> Result<(), io::Error> {
-
-    println!("configure_network_settings! ethernet settings dhcp {} wifi dhcp {}", ethernet_settings.dhcp_enabled, wifi_settings.dhcp_enabled);
 
     if ethernet_settings.dhcp_enabled { //ethernet dhcp, wifi off
         write_network_settings(ethernet_settings, ETHERNET_DHCP_ENABLE_TEMPLATE, ethernet_output_file)?;

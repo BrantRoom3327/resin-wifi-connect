@@ -39,139 +39,153 @@
 				<img class="pull-right" height="20%" width="14%" src="/img/Smart_Diagnostics_Logo.png"></img>
 			</div>
 			<div class="row">
-				<h4>Ethernet Configuration</h4>
+				<h4>Network Configuration</h4>
 			</div>
 
 			<div class="row col-lg-8">
 				<div class="input-group col-md-10" id="alldata" class="col-md-10" name="alldata">
-					<div class="row ethernet_dhcp col-xs-12">
-						<div class="col-md-4"><label for="ethernet_dhcp_enabled">Network Configuration Type</label></div>
-							<p>{{network_configuration_type}}</p>
-					</div>
-					<div class="row ethernet_ip col-xs-12">
-						<div class="col-md-4"><label for="ethernet_ip_address">IP Address</label></div>
-							<p>FIXME</p>
-					</div>
-					<div class="row ethernet_subnet col-xs-12">
-						<div class="col-md-4"><label for="ethernet_subnet_mask">Subnet Mask</label></div>
-							<p>FIXME</p>
-					</div>
-					<div class="row ethernet_gateway col-xs-12">
-						<div class="col-md-4"><label for="ethernet_gateway">Gateway</label></div>
-							<p>FIXME</p>
-					</div>
-					<div class="row ethernet_dns col-xs-12">
-						<div class="col-md-4"><label for="ethernet_dns">DNS</label></div>
-							<p>FIXME<p>
-					</div>
+
+					<div class="row ethernet_static col-xs-12">
+                        <div class="row col-xs-12">
+                            <div class="col-md-4"><label for="ethernet_dhcp_enabled">Type</label></div>
+                                <p>Ethernet Static</p>
+                        </div>
+                        <div class="row ethernet_ip col-xs-12">
+                            <div class="col-md-4"><label for="ethernet_ip_address">IP Address</label></div>
+                            <p>{{ip_address}}</p>
+                        </div>
+                        <div class="row ethernet_subnet col-xs-12">
+                            <div class="col-md-4"><label for="ethernet_subnet_mask">Subnet Mask</label></div>
+                            <p>{{netmask}}</p>
+                        </div>
+                        <div class="row ethernet_gateway col-xs-12">
+                            <div class="col-md-4"><label for="ethernet_gateway">Gateway</label></div>
+                            <p>{{gateway}}</p>
+                        </div>
+                        <div class="row ethernet_dns col-xs-12">
+                            <div class="col-md-4"><label for="ethernet_dns">DNS</label></div>
+                            <p>{{dns}}<p>
+                        </div>
+                    </div>
+
+                    <div class="row ethernet_dhcp col-xs-12">
+                        <div class="row col-xs-12">
+                            <div class="col-md-4"><label>Type</label></div>
+                                <p>Ethernet DHCP</p>
+                        </div>
+                    </div>
+
+                    <div class="row wifi_dhcp col-xs-12">
+                        <div class="row col-xs-12">
+                            <div class="col-md-4"><label>Type</label></div>
+                                <p>Wifi DHCP</p>
+                        </div>
+                    </div>
+
 					<div class="row">
 						<h4>&nbsp;</h4>
 					</div>
-					<div class="row">
-						<h4>Cloud Storage</h4>
-					</div>
-					<div class="row cloud-storage col-xs-12">
-						<div class="col-md-4"><label for="cloud-storage">Store in Cloud</label></div>
-							<p>{{cloud_storage_enabled}}</p>
-					</div>
-					<div class="row network col-xs-12">
-						<div class="col-md-4"><label for="destinationAddress">Non Cloud Destination</label></div>
+
+					<div class="row show_cloud_disabled col-xs-12">
+                        <div class="row"><h4>Cloud Storage Disabled</h4></div>
+						<div class="col-md-4"><label>Non Cloud Destination</label></div>
 							<p>{{data_destination_url}}</p>
 					</div>
+                    <div class="row show_cloud_enabled col-xs-12">
+                        <div class="row"><h4>Cloud Storage Enabled</h4></div>
+					</div>
+
+
 					<div class="row">
 						<h4>&nbsp;</h4>
 					</div>
-					<div class="row">
-						<h4>Proxy</h4>
-					</div>
-					<div class="row proxy col-xs-12">
-						<div class="col-md-4"><label for="proxy_login">Username</label></div>
-							<p>{{proxy.login}}</p>
-					</div>
-					<div class="row proxy col-xs-12">
-						<div class="col-md-4"><label for="proxy_password">Password</label></div>
-							<p>{{proxy.password}}</p>
-					</div>
-					<div class="row proxy col-xs-12">
-						<div class="col-md-4"><label for="proxy_gateway">Gateway</label></div>
-							<p>{{proxy.gateway}}</p>
-					</div>
-					<div class="row proxy col-md-12">
-						<div class="col-md-4"><label for="proxy_gateway_port">Port</label></div>
-							<p>{{proxy.gateway_port}}</p>
-					</div>
+					
+					<div class="row proxy_enabled col-xs-12">
+                        <div class="row">
+                            <h4>Proxy Enabled</h4>
+                        </div>
+                        <div class="row col-xs-12">
+                            <div class="col-md-4"><label>Username</label></div>
+                                <p>{{proxy.login}}</p>
+                        </div>
+                        <div class="row col-xs-12">
+                            <div class="col-md-4"><label>Password</label></div>
+                                <p>{{proxy.password}}</p>
+                        </div>
+                        <div class="row col-xs-12">
+                            <div class="col-md-4"><label>Gateway</label></div>
+                                <p>{{proxy.gateway}}</p>
+                        </div>
+                        <div class="row col-md-12">
+                            <div class="col-md-4"><label>Port</label></div>
+                                <p>{{proxy.gateway_port}}</p>
+                        </div>
+                    </div>
+
+                    <div class="row proxy_disabled col-xs-12">
+                        <div class="row">
+                            <h4>Proxy Disbled</h4>
+                        </div>
+                    </div>
+
 				</div>
 			</div>
 
 		<script>
 			$(function() {
-				function ChooseDataSource(checked){
-					if(checked == 'Network') {
-						$('.network').show();
-					} else {
-						$('.network').hide();
-					}
-					// this is all pretty weird using the selected data source to store data and not the item iteself.
-					$("#selected-data-source").val(checked);
-				}
-				$("input[name='cloud_storage_enabled']").on('click', function() {
-					ChooseDataSource($(this).attr("id"));
+
+				$(function() {
+                    //setup cloud storage div visability
+                    let cloud_storage_enabled = "{{cloud_storage_enabled}}";
+                    showHideCloudDiv(cloud_storage_enabled);
+
+                    //setup network config visability
+                    let network = parseInt("{{network_configuration_type}}");
+                    showHideNetworkDiv(network);
+
+                    //setup proxy visability
+                    let proxy_enabled = "{{proxy.enabled}}";
+                    showHideProxyDiv(proxy_enabled);
 				});
 
-				function SetupEthernet(checked){
-					if(checked == 'Static') {
-						$('.ethernet').show();
-					} else {
-						$('.ethernet').hide();
-					}
-					// this is all pretty weird using the selected data source to store data and not the item iteself.
-					$("#ethernet-select").val(checked);
-				}
-				$("input[name='ethernet_dhcp_enabled']").on('click', function() {
-					SetupEthernet($(this).attr("id"));
-				});
-	
-				function ChooseProxy(checked){
-					if(checked == 'proxy_on') {
-						$('.proxy').show();
-					} else {
-						$('.proxy').hide();
-					}
-					$("#proxy-select").val(checked);
-				}
-				$("input[name='proxy']").on('click', function() {
-					ChooseProxy($(this).attr("id"));
-				});
-
-				// default setup of hide/show for cloud storage
-				if($('input[name=cloud_storage_enabled]').is(':checked')){
-					var v = $('input[name=cloud_storage_enabled]:checked').val();
-					if (v==1) { // value of 1 used for cloud enable which hides the settings.
-						$('.network').hide();
-					} else {
-						$('.network').show();
+				// select the network type by default
+				function showHideNetworkDiv(val) {
+					if (val===0) { // 0 means static ethernet
+						$('.ethernet_static').show();
+						$('.ethernet_dhcp').hide();
+						$('.wifi_dhcp').hide();
+					} else if (val===1) { //ethernet dhcp 
+						$('.ethernet_static').hide();
+						$('.ethernet_dhcp').show();
+						$('.wifi_dhcp').hide();
+					} else if (val===2) { // wifi dhcp
+						$('.ethernet_static').hide();
+						$('.ethernet_dhcp').hide();
+						$('.wifi_dhcp').show();
 					}
 				};
 
-				// default setup of hide/show for cloud storage
-				if($('input[name=proxy]').is(':checked')){
-					var v = $('input[name=proxy]:checked').val();
-					if (v==1) {
-						$('.proxy').show();
+				function showHideCloudDiv(cloud_enabled) {
+					if(cloud_enabled === "true") {
+						$('.show_cloud_enabled').show();
+						$('.show_cloud_disabled').hide();
 					} else {
-						$('.proxy').hide();
+						$('.show_cloud_enabled').hide();
+						$('.show_cloud_disabled').show();
 					}
-				};
+				}
 
-				// default setup of hide/show for cloud storage
-				if($('input[name=ethernet]').is(':checked')){
-					var v = $('input[name=ethernet]:checked').val();
-					if (v==1) {
-						$('.ethernet').show();
-					} else {
-						$('.ethernet').hide();
+				function showHideProxyDiv(proxy_enabled) {
+					if (proxy_enabled === "true") {
+                        console.log("Showing proxy enabled");
+						$('.proxy_enabled').show();
+						$('.proxy_disabled').hide();
+                    } else {
+                        console.log("Showing proxy disabled");
+						$('.proxy_enabled').hide();
+						$('.proxy_disabled').show();
 					}
-				};
+				}
 			});
 
 		</script>

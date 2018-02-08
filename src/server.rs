@@ -189,6 +189,8 @@ pub fn start_server(
         config_data,
         auth_file_path,
         auth_data,
+        ethernet_static_network_settings: NetworkSettings::new("invalid".to_string()),
+        wifi_dhcp_network_settings: WifiAPSettings::new(),
     };
 
     let request_state = RequestSharedState {
@@ -220,16 +222,9 @@ pub fn start_server(
     // handlebar style templates
     let mut hbse = HandlebarsEngine::new();
 
-    // FIXME: Load the template dir into the runtime data.  We can go after the templates in a less
-    // directory known way.
-    //
     //path for templates.
     let template_path = ui_directory.to_str().unwrap().to_string() + TEMPLATE_DIR;
     hbse.add(Box::new(DirectorySource::new(PathBuf::from(template_path), PathBuf::from(".hbs"))));
-
-    //path for network configuration templates.
-    //let network_config_template_path = ui_directory.to_str().unwrap().to_string() + &NETWORK_CONFIG_TEMPLATE_DIR.to_string();
-    //hbse.add(Box::new(DirectorySource::new(PathBuf::from(network_config_template_path), PathBuf::from(".hbs"))));
 
     if let Err(r) = hbse.reload() {
         panic!("{}", r);
@@ -389,4 +384,16 @@ pub fn collect_do_auth_options(req: &mut Request) -> IronResult<Auth> {
 pub fn get_kcf_runtime_data(req: &mut Request) -> Result<RuntimeData, IronError> {
     let state = get_request_state!(req);
     Ok(state.kcf.clone())
+}
+
+// inject ethernet settings into runtime data.
+pub fn inject_to_runtime(req: &mut Request, ethernet_settings: NetworkSettings) -> Result<(), IronError> {
+    let wr = match req.get::<Write<RequestSharedState>>() {
+        Ok(wr) => wr,
+        Err(e) => return Err(IronError::new(StringError("Could not get request shared state".to_string()), status::InternalServerError)),
+    };
+
+    wr.as_ref().lock().unwrap().kcf.ethernet_static_network_settings = ethernet_settings;
+
+    Ok(())
 }
