@@ -13,7 +13,7 @@ WORKDIR /usr/src/app
 
 #update this to pull a prebuilt version of the app down from github
 
-RUN curl -Ls https://github.com/BrantRoom3327/resin-wifi-connect/raw/master/releases/bundle-debug.tgz > bundle.tgz && tar -xvf -C /usr/src/app/
+RUN curl -Ls https://github.com/BrantRoom3327/resin-wifi-connect/raw/master/releases/bundle-debug.tgz > bundle.tgz && tar -xvf bundle.tgz --strip-components=2 -C /usr/src/app/
 
 #RUN curl https://api.github.com/repos/resin-io/resin-wifi-connect/releases/latest -s \
 #    | grep -hoP 'browser_download_url": "\K.*%%RESIN_ARCH%%\.tar\.gz' \

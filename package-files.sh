@@ -34,6 +34,7 @@ fi
 DATETIME=`date '+%Y-%m-%d---%H-%M-%S'`
 
 #tar everything up and time stample it.
-tar czf bundle-${DATETIME}.tgz ./bundle
+tar czf releases/bundle-${DATETIME}.tgz $BUNDLE_DIR
+rm -rf $BUNDLE_DIR
 
 echo "Created: bundle-${DATETIME}.tgz"
