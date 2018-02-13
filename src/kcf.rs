@@ -1,4 +1,5 @@
 #![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
 
 use std::process::Command;
 use std::net::Ipv4Addr;
@@ -138,13 +139,14 @@ impl WifiAPSettings {
             psk: String::new(),
         }
     }
+    /*
     pub fn init(adapter_name: String, ssid: String, psk: String) -> WifiAPSettings {
         WifiAPSettings {
             adapter_name,
             ssid,
             psk,
         }
-    }
+    }*/
 }
 
 
@@ -361,7 +363,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     ) {
         Ok(settings) => settings,
         Err(err) => {
-            println!("Network settings validation failed!");
+            debug!("Network settings validation failed!");
             return Err(IronError::new(err, status::InternalServerError));
         },
     };
@@ -382,7 +384,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     {
         Ok(()) => (),
         Err(e) => {
-            println!("configure_system_network_settings() Error -> {:?}", e);
+            debug!(" Error -> {:?}", e);
             return Err(IronError::new(e, status::InternalServerError));
         },
     }
@@ -539,11 +541,11 @@ pub fn http_route_get_status(req: &mut Request) -> IronResult<Response> {
     //only merge in the template data we need based on configuration type.
     let net_cfg = get_network_cfg_type(kcf.config_data.network_configuration_type);
     match net_cfg {
-        Ethernet_Static => 
+        Some(NetworkCfgType::Ethernet_Static) => 
             merge(&mut cfg_json, json!(kcf.ethernet_static_network_settings)),
-        Wifi_DHCP => 
+        Some(NetworkCfgType::Wifi_DHCP) => 
             merge(&mut cfg_json, json!(kcf.wifi_dhcp_network_settings)),
-        _ => (),
+        _ => merge(&mut cfg_json, json!({})), //don't merge in anything
     }
 
     let mut resp = Response::new();
@@ -589,7 +591,7 @@ pub fn get_ip_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
 
     // This is to handle the case that ethernet is not plugged in or up
     // we don't want to fail, we would like to display an invalid value to the user.
-    println!("No IPAddress or gateway found for: {}, return invalid ip for display", adapter);
+    debug!("No IPAddress or gateway found for: {}", adapter);
     Some(Ipv4Addr::new(0,0,0,0))
 }
 
@@ -779,7 +781,7 @@ pub fn get_network_cfg_type(value: u8) -> Option<NetworkCfgType> {
     let network_configuration_type = match NetworkCfgType::from_u8(value) {
         Some(val) => val,
         None => {
-            println!("invalid form value for network cfg type!");
+            debug!("invalid form value for network cfg type!");
             return None;
         },
     };

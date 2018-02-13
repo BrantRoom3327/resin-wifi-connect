@@ -390,7 +390,7 @@ pub fn get_kcf_runtime_data(req: &mut Request) -> Result<RuntimeData, IronError>
 pub fn inject_to_runtime(req: &mut Request, ethernet_settings: NetworkSettings) -> Result<(), IronError> {
     let wr = match req.get::<Write<RequestSharedState>>() {
         Ok(wr) => wr,
-        Err(e) => return Err(IronError::new(StringError("Could not get request shared state".to_string()), status::InternalServerError)),
+        Err(_e) => return Err(IronError::new(StringError("Could not get request shared state".to_string()), status::InternalServerError)),
     };
 
     wr.as_ref().lock().unwrap().kcf.ethernet_static_network_settings = ethernet_settings;

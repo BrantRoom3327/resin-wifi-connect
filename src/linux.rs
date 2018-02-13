@@ -1,7 +1,3 @@
-use std::thread;
-use std::process;
-use std::time::Duration;
-use std::sync::mpsc::{channel, Sender};
 use std::error::Error;
 use std::process::Command;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -32,7 +28,7 @@ pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
         }
     }
 
-    // return unspecified ip address
+    debug!("returning unspecified for {}", adapter);
     Some(Ipv4Addr::new(0,0,0,0))
 }
 
@@ -55,6 +51,7 @@ pub fn get_gateway_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
         }
     }
 
+    debug!("returning unspecified for {}", adapter);
     // incase the adapter isn't up or available, return invalid data but still an ip address.
     Some(Ipv4Addr::new(0,0,0,0))
 }
@@ -82,6 +79,6 @@ pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
         return Some(dns_entries);
     }
 
-    println!("No dns entries available");
+    debug!("no dns entries found in /etc/resolv.conf");
     None
 }
