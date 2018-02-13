@@ -79,7 +79,7 @@ pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
     }
 
     if dns_entries.len() > 0 {
-        Some(dns_entries)
+        return Some(dns_entries);
     }
 
     println!("No dns entries available");
