@@ -27,7 +27,8 @@ if [ "${PRODUCTION}" == "1" ]; then
     scripts/local-build.sh x86_64-unknown-linux-gnu 
 elif [ "${USE_HOTSPOT}" == "1" ]; then 
     cargo build
-    target/debug/wifi-connect --portal-interface=wlp2s0 --portal-ssid=QMTest
+    # need root to be able to start an AP with NetworkManager
+    sudo target/debug/wifi-connect --portal-interface=wlp2s0 --portal-ssid=QMTest
 else
     #this is the default with no options.  It only runs the http server and tries to operate without a hotspot but allow for 
     #setting system params.  
