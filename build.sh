@@ -24,14 +24,10 @@ esac
 done
 
 if [ "${PRODUCTION}" == "1" ]; then
-    #build the release for docker push on the Intel NUC
     scripts/local-build.sh x86_64-unknown-linux-gnu 
-    #package up the files and put them in releases, '-p' is for production
-    #./package-files.sh -p
 elif [ "${USE_HOTSPOT}" == "1" ]; then 
     cargo build
-    cp target/debug/wifi-connect .
-    ./wifi-connect --portal-interface=wlp2s0 --collector-wifi=wlp2s0 --collector-ethernet=eth0
+    target/wifi-connect --portal-interface=wlp2s0 --portal-ssid=QMTest
 else
     #this is the default with no options.  It only runs the http server and tries to operate without a hotspot but allow for 
     #setting system params.  
