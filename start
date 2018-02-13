@@ -1,7 +1,15 @@
 #!/bin/bash
-export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket ./wifi-connect --clear=false --portal-interface=wlp2s0
+#this is for local docker builds, use /host for production
+#export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
 
-echo "wifi connect exited"
+echo "network configuration"
+ifconfig
+
+echo "run the app"
+./wifi-connect --portal-interface=wlp4s0
+
+echo "kcf-wifi-connect exited"
 while true; do
     sleep 100
 done

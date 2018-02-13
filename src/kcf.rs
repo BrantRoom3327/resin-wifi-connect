@@ -587,8 +587,10 @@ pub fn get_ip_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
         }
     }
 
-    println!("No IPAddress or gateway found for: {}", adapter);
-    None
+    // This is to handle the case that ethernet is not plugged in or up
+    // we don't want to fail, we would like to display an invalid value to the user.
+    println!("No IPAddress or gateway found for: {}, return invalid ip for display", adapter);
+    Some(Ipv4Addr::new(0,0,0,0))
 }
 
 pub fn load_auth_file(file_path: &str) -> io::Result<Auth> {

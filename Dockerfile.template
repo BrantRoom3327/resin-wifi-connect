@@ -3,7 +3,7 @@ FROM resin/%%RESIN_MACHINE_NAME%%-debian
 ENV INITSYSTEM on
 
 RUN apt-get update \
-    && apt-get install -y dnsmasq \
+    && apt-get install -y dnsmasq wireless-tools \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -11,15 +11,10 @@ RUN mkdir -p /usr/src/app/
 
 WORKDIR /usr/src/app
 
-#update this to pull a prebuilt version of the app down from github
-
-RUN curl -Ls https://github.com/BrantRoom3327/resin-wifi-connect/raw/master/releases/bundle-debug.tgz > bundle.tgz && tar -xvf bundle.tgz --strip-components=2 -C /usr/src/app/
-
-#RUN curl https://api.github.com/repos/resin-io/resin-wifi-connect/releases/latest -s \
-#    | grep -hoP 'browser_download_url": "\K.*%%RESIN_ARCH%%\.tar\.gz' \
-#    | xargs -n1 curl -Ls \
-#    | tar -xvz -C /usr/src/app/
-
-COPY start .
+#pack it up
+COPY ui ui/
+COPY data data/
+COPY start start
+COPY target/x86_64-unknown-linux-gnu/release/wifi-connect .
 
 CMD ["bash", "start"]

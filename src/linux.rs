@@ -32,7 +32,8 @@ pub fn get_netmask_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
         }
     }
 
-    None
+    // return unspecified ip address
+    Some(Ipv4Addr::new(0,0,0,0))
 }
 
 pub fn get_gateway_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
@@ -54,7 +55,8 @@ pub fn get_gateway_for_adapter(adapter: &str) -> Option<Ipv4Addr> {
         }
     }
 
-    None
+    // incase the adapter isn't up or available, return invalid data but still an ip address.
+    Some(Ipv4Addr::new(0,0,0,0))
 }
 
 pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
@@ -78,7 +80,8 @@ pub fn get_dns_entries() -> Option<Vec<Ipv4Addr>> {
 
     if dns_entries.len() > 0 {
         Some(dns_entries)
-    } else {
-        None
     }
+
+    println!("No dns entries available");
+    None
 }

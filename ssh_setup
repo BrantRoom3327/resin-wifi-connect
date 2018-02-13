@@ -1,4 +1,3 @@
-#!/bin/bash
-set -e
+echo "source this script, use '. scriptname.sh'"
 eval "$(ssh-agent -s)"
 ssh-add -K ~/.ssh/id_rsa_room3327

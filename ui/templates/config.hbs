@@ -183,7 +183,7 @@
 				// handlers for radio button presses.
 				$("input[name='cloud_storage_enabled']").on('click', function() {
 					var val = $(this).attr("value");
-                    showHideCloudDiv(parseInt(val));
+                                        showHideCloudDiv(parseInt(val));
 				});
 				$("input[name='network_configuration_type']").on('click', function() {
 					var val = $(this).attr("value");
@@ -199,12 +199,13 @@
 					var $radios = $('input[name=cloud_storage_enabled]');
 					if($radios.is(':checked') === false) {
 						//default is bool value, true false, do a test and use int from there.
-						if ("{{cloud_storage_enabled}}" === "true") {
+                                                let cloud_storage_enabled = "{{cloud_storage_enabled}}";
+						if (cloud_storage_enabled === "true") {
 							showHideCloudDiv(1);
 							$radios.filter('[value=1]').prop('checked', true);
 						} else {
-							$radios.filter('[value=0]').prop('checked', true);
 							showHideCloudDiv(0);
+							$radios.filter('[value=0]').prop('checked', true);
 						}
 					}
 				});
@@ -247,19 +248,17 @@
 				};
 
 				function showHideCloudDiv(val) {
-					//console.log("Show Hide cloud div given ", val);
-					if(val===1) {
-						$('.show_cloud_settings').show();
-					} else {
+					if(val === 1) { //1 means store in cloud, so hide settings
 						$('.show_cloud_settings').hide();
+					} else {  // otherwise show settings
+						$('.show_cloud_settings').show();
 					}
 				}
 
 				function showHideProxyDiv(val) {
-					//console.log("Show Hide proxy div given", val);
-					if(val===1) {
+					if(val === 1) {
 						$('.show_proxy_settings').show();
-					} else if (val===0) {
+                                        } else {
 						$('.show_proxy_settings').hide();
 					}
 				}

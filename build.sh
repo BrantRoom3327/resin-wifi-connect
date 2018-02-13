@@ -6,10 +6,6 @@ while [[ $# -gt 0 ]]
 do
 key="$1"
 
-#default for the script is to build for debug, no hotspot and no docker
-#local is a local build using docker with the hotspot
-#production is a release for arm on the RPI3
-
 case $key in
     -l|--local)
     LOCAL_DOCKER=1
@@ -27,30 +23,21 @@ case $key in
 esac
 done
 
-#echo PRODUCTION = "${PRODUCTION}"
-#echo LOCAL_DOCKER = "${LOCAL_DOCKER}"
-#echo USE_HOTSPOT = "${USE_HOTSPOT}"
-
 if [ "${PRODUCTION}" == "1" ]; then
-    #build the release for docker push.  
-    #NOTE: We are building for the raspberry pi or armv7 chips here.
-    scripts/local-build.sh armv7-unknown-linux-gnueabihf
-    docker build --rm -t wifitest .
-elif [ "${LOCAL_DOCKER}" == "1" ]; then 
-    # use the local Dockerfile to build an image, and leave hotspot enabled.
-    cargo build
-    cp target/debug/wifi-connect .
-    docker build --rm -t wifitest .
+    #build the release for docker push on the Intel NUC
+    scripts/local-build.sh x86_64-unknown-linux-gnu 
+    #package up the files and put them in releases, '-p' is for production
+    #./package-files.sh -p
 elif [ "${USE_HOTSPOT}" == "1" ]; then 
     cargo build
     cp target/debug/wifi-connect .
     ./wifi-connect --portal-interface=wlp2s0 --collector-wifi=wlp2s0 --collector-ethernet=eth0
 else
     #this is the default with no options.  It only runs the http server and tries to operate without a hotspot but allow for 
-    #setting system params.  You will likely need to sudo the wifi-connect command below to actually set system params (ethernet settings).
+    #setting system params.  
     cargo build --features="no_hotspot"
     cp target/debug/wifi-connect .
     #to find /sbin/ifconfig on the pi by default.
     export PATH="$PATH:/sbin/" 
-    ./wifi-connect --portal-gateway=192.168.1.148
+    ./wifi-connect --portal-gateway=192.168.1.148 --config-file=./data/cfg.json --auth-file=./data/auth.json
 fi
