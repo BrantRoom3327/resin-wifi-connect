@@ -3,6 +3,7 @@ use std::time::Duration;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::error::Error;
 use std::net::Ipv4Addr;
+use std::process::Child;
 
 #[cfg(not(feature = "no_hotspot"))]
 use network_manager::{AccessPoint, Connection, ConnectionState, Connectivity, Device, DeviceType,

@@ -1,0 +1,21 @@
+FROM balena/amd64-fedora:28
+
+RUN dnf install -y \
+	dnsmasq wireless-tools vim file udhcpd network-manager \
+	&& systemctl mask NetworkManager.service \
+	&& dnf clean all
+
+ENV INITSYSTEM on
+
+RUN mkdir -p /usr/src/app/
+
+WORKDIR /usr/src/app
+
+#The app
+COPY ui ui/
+COPY config config/
+COPY kcf_scripts kcf_scripts/
+COPY scripts/start.sh .
+COPY target/x86_64-unknown-linux-gnu/release/wifi-connect .
+
+CMD ["bash", "start.sh"]
