@@ -1,14 +1,9 @@
-FROM resin/amd64-debian
+FROM resin/amd64-fedora:25
 
-#RUN dnf install -y dnsmasq wireless-tools vim file udhcpd network-manager \
-#	&& systemctl mask NetworkManager.service \
-#	&& dnf clean all
-
-RUN apt-get update \
-    && apt-get install -y dnsmasq wireless-tools \
-    && apt-get clean \
-    && systemctl mask NetworkManager.service \
-    && rm -rf /var/lib/apt/lists/*
+RUN dnf install -y \
+	dnsmasq wireless-tools vim file udhcpd network-manager \
+	&& systemctl mask NetworkManager.service \
+	&& dnf clean all
 
 ENV INITSYSTEM on
 
@@ -21,6 +16,6 @@ COPY ui ui/
 COPY config config/
 COPY kcf_scripts kcf_scripts/
 COPY scripts/start.sh .
-#COPY target/x86_64-unknown-linux-gnu/release/wifi-connect .
+COPY target/x86_64-unknown-linux-gnu/release/wifi-connect .
 
 CMD ["bash", "start.sh"]
