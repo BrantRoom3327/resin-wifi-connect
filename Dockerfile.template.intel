@@ -1,9 +1,14 @@
-FROM balena/amd64-fedora:28
+FROM resin/amd64-debian
 
-RUN dnf install -y \
-	dnsmasq wireless-tools vim file udhcpd network-manager \
-	&& systemctl mask NetworkManager.service \
-	&& dnf clean all
+#RUN dnf install -y dnsmasq wireless-tools vim file udhcpd network-manager \
+#	&& systemctl mask NetworkManager.service \
+#	&& dnf clean all
+
+RUN apt-get update \
+    && apt-get install -y dnsmasq wireless-tools \
+    && apt-get clean \
+    && systemctl mask NetworkManager.service \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV INITSYSTEM on
 
