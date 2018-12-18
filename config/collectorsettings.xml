@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<SmartDiagnosticsConfiguration>
+ <Settings>
+   <PrometheusUrl>https://c.kcftech.com/restup/</PrometheusUrl>
+   <ProxySettings>{"Enabled":false,"Server":"","Port":11114,"UseDefaultCredentials":false,"User":"","Password":""}</ProxySettings>
+   <NetworkId>1178B3AD</NetworkId>
+   <AutoJoinReceiverSubnet>192.168.151.100,255.255.255.0</AutoJoinReceiverSubnet>
+ </Settings>
+</SmartDiagnosticsConfiguration>

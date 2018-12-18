@@ -7,34 +7,36 @@ do
 key="$1"
 
 case $key in
-    -l|--local)
-    LOCAL_DOCKER=1
+    -pi|--pi|-p)
+    RASPBERRY_PI=1
     shift # past arg 
     ;;
-    -h|--hotspot)
-    USE_HOTSPOT=1
-    shift # past arg 
-    ;;
-    #build for arm v7, push to resin and run f
-    -p|--production)
-    PRODUCTION=1
+    -intel|--intel|-i)
+    INTEL_NUC=1
     shift # past arg 
     ;;
 esac
 done
 
-if [ "${PRODUCTION}" == "1" ]; then
-    scripts/local-build.sh x86_64-unknown-linux-gnu 
-elif [ "${USE_HOTSPOT}" == "1" ]; then 
-    cargo build
-    # need root to be able to start an AP with NetworkManager
-    sudo target/debug/wifi-connect --portal-interface=wlp2s0 --portal-ssid=QMTest
+if [ "${RASPBERRY_PI}" == "1" ]; then
+    scripts/local-build.sh armv7-unknown-linux-gnueabihf armv7hf
+    cp Dockerfile.template.rpi Dockerfile.template
+elif [ "${INTEL_NUC}" == "1" ]; then
+    scripts/local-build.sh x86_64-unknown-linux-gnu amd64 
+    cp Dockerfile.template.intel Dockerfile.template
 else
     #this is the default with no options.  It only runs the http server and tries to operate without a hotspot but allow for 
     #setting system params.  
     cargo build --features="no_hotspot"
     cp target/debug/wifi-connect .
+
+#    RUST_LOG=error ./wifi-connect
+
     #to find /sbin/ifconfig on the pi by default.
     export PATH="$PATH:/sbin/" 
-    ./wifi-connect --portal-gateway=192.168.1.148 --config-file=./data/cfg.json --auth-file=./data/auth.json
+
+    pidof wifi-connect | xargs kill -9 || true
+
+    echo "Run local"
+    ./wifi-connect --portal-gateway=192.168.1.180 --config-file=config/cfg.mac --auth-file=config/auth.json
 fi

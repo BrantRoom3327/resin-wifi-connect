@@ -42,37 +42,41 @@
 				</div>
 	
 				<div class="row col-xs-12">
-					<div class="col-xs-2"><label>Network Configuration</label></div>
-					<div class="input-group col-xs-10" id="network-select-type" class="col-md-3" name="network-select-type">
+					<div class="col-xs-4"><label>Network Configuration</label></div>
+					<div class="input-group col-xs-8" id="network-select-type" class="col-md-3" name="network-select-type">
 						<input type="radio" name="network_configuration_type" value="0">Ethernet Static &nbsp;
 						<input type="radio" name="network_configuration_type" value="1">Ethernet DHCP &nbsp;
-						<input type="radio" name="network_configuration_type" value="2">Wifi DHCP &nbsp;
+						<input type="radio" name="network_configuration_type" value="2">Wifi Static &nbsp;
+						<input type="radio" name="network_configuration_type" value="3">Wifi DHCP &nbsp;
 					</div>
 					
-
 					<div class="input-group ethernet_static col-xs-10" class="col-md-3">
 						<div class="row col-xs-12">
-							<div class="col-md-2"><label for="ethernet_ip_address">IP Address</label></div>
-							<div class="col-xs-6">
-                                <input type="text" class="form-control" name="ethernet_ip_address" value="{{ip_address}}">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="ip_address">IP Address</label></div>
+							<div class="col-xs-7">
+                                <input type="text" class="form-control" name="ip_address" value="{{ip_address}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
-							<div class="col-md-2"><label for="ethernet_subnet_mask">Subnet Mask</label></div>
-							<div class="col-xs-6">
-								<input type="text" class="form-control" name="ethernet_subnet_mask" value="{{netmask}}">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="subnet_mask">Subnet Mask</label></div>
+							<div class="col-xs-7">
+								<input type="text" class="form-control" name="subnet_mask" value="{{netmask}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
-							<div class="col-md-2"><label for="ethernet_gateway">Gateway</label></div>
-							<div class="col-xs-6">
-                                <input type="text" class="form-control" name="ethernet_gateway" value="{{gateway}}">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="gateway">Gateway</label></div>
+							<div class="col-xs-7">
+                                <input type="text" class="form-control" name="gateway" value="{{gateway}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
-							<div class="col-md-2"><label for="ethernet_dns">DNS</label></div>
-							<div class="col-xs-6">
-								<input type="text" class="form-control" name="ethernet_dns" value="{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="dns">DNS</label></div>
+							<div class="col-xs-7">
+								<input type="text" class="form-control" name="dns" value="{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
 							</div>
 						</div>
 						<div class="row-spacer">
@@ -85,15 +89,68 @@
 					
 					<div class="input-group wifi_dhcp col-xs-10" class="col-md-3">
 						<div class="row col-xs-12">
-							<div class="col-md-2"><label for="wifi_ssid">Wifi SSID</label></div>
-							<div class="col-xs-6">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="wifi_ssid">Wifi SSID</label></div>
+							<div class="col-xs-7">
 								<input type="text" class="form-control" name="wifi_ssid" value="">
 							</div>
 						</div>
 						<div class="row col-xs-12">
-							<div class="col-md-2"><label for="wifi_passphrase">Wifi Password</label></div>
-							<div class="col-xs-6">
-								<input type="passphrase" class="form-control" name="wifi_passphrase" value="">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="wifi_passphrase">Wifi Password</label></div>
+							<div class="col-xs-7">
+								<input type="password" class="form-control" name="wifi_passphrase" value="">
+							</div>
+						</div>
+						<div class="row-spacer">
+							<p>&nbsp;</p>
+						</div>
+						<div class="row-spacer">
+							<p>&nbsp;</p>
+						</div>
+					</div>
+
+                    <div class="input-group wifi_static col-xs-10" class="col-md-3">
+						<div class="row col-xs-12">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="wifi_ssid">Wifi SSID</label></div>
+							<div class="col-xs-7">
+								<input type="text" class="form-control" name="wifi_ssid" value="">
+							</div>
+						</div>
+						<div class="row col-xs-12">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="wifi_passphrase">Wifi Password</label></div>
+							<div class="col-xs-7">
+								<input type="password" class="form-control" name="wifi_passphrase" value="">
+							</div>
+						</div>
+                        <div class="row col-xs-12">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="ip_address">IP Address</label></div>
+							<div class="col-xs-7">
+                                <input type="text" class="form-control" name="ip_address" value="{{ip_address}}">
+							</div>
+						</div>
+						<div class="row col-xs-12">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="subnet_mask">Subnet Mask</label></div>
+							<div class="col-xs-7">
+								<input type="text" class="form-control" name="subnet_mask" value="{{netmask}}">
+							</div>
+						</div>
+						<div class="row col-xs-12">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="gateway">Gateway</label></div>
+							<div class="col-xs-7">
+                                <input type="text" class="form-control" name="gateway" value="{{gateway}}">
+							</div>
+						</div>
+						<div class="row col-xs-12">
+                            <div class="col-xs-1">&nbsp;</div>
+							<div class="col-xs-4"><label for="dns">DNS</label></div>
+							<div class="col-xs-7">
+								<input type="text" class="form-control" name="dns" value="{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
 							</div>
 						</div>
 						<div class="row-spacer">
@@ -104,69 +161,94 @@
 						</div>
 					</div>
 				</div>
-				<div class="row-spacer">
-					<p>&nbsp;</p>
-				</div>	
 
 				<div class="row col-xs-12">
-					<div class="col-xs-2"><label>Data Storage Server</label></div>
-					<div class="input-group col-xs-10" id="data-source-type" class="col-md-3" name="data-source-type">
+                    <div class="row-spacer">
+                        <p>&nbsp;</p>
+                    </div>
+					<div class="col-xs-4"><label>Data Storage Server</label></div>
+					<div class="input-group col-xs-8" id="data-source-type" class="col-md-3" name="data-source-type">
 						<input type="radio" name="cloud_storage_enabled" value="1">Cloud&nbsp;
 						<input type="radio" name="cloud_storage_enabled" value="0">Network URL&nbsp;
 					</div>
+					<div class="row-spacer">
+						<p>&nbsp;</p>
+					</div>
 					<div class="row show_cloud_settings col-xs-12">
-						<div class="col-md-2"><label for="destinationAddress">Destination</label></div>
-						<div class="col-xs-6">
+                        <div class="col-xs-1">&nbsp;</div>
+						<div class="col-xs-3"><label for="destinationAddress">Destination</label></div>
+						<div class="col-xs-8">
 							<input type="text" class="form-control" name="destinationaddress" value="{{data_destination_url}}">
-								example: http://host-name-here:52000
+								example: http://www.localserver.com:12345
 						</div>
 					</div>
 					<div class="row-spacer">
 						<p>&nbsp;</p>
 					</div>
 				</div>
+                <div class="row-spacer">
+                    <p>&nbsp;</p>
+                </div>
+
+                <div class="row-spacer">
+                    <p>&nbsp;</p>
+                </div>
 
 				<div class="page-header">
 					<h3>Proxy Settings</h3>
 				</div>
 				<div class="row col-xs-12">
-					<div class="col-xs-2"></div>
-					<div class="input-group col-xs-10" id="proxy-type" class="col-md-3" name="proxy-type">&nbsp;&nbsp;&nbsp;&nbsp;
+					<div class="col-xs-3"></div>
+					<div class="input-group col-xs-9" id="proxy-type" class="col-md-3" name="proxy-type">&nbsp;&nbsp;&nbsp;&nbsp;
 						<input type="radio" name="proxy_enabled" value="0">Disable&nbsp;&nbsp;&nbsp;
 						<input type="radio" name="proxy_enabled" value="1">Enable&nbsp;
 					</div>
+                    <div class="row-spacer">
+                        <p>&nbsp;</p>
+                    </div>
 				</div>
 				<br>
 	
 				<div class="row show_proxy_settings col-xs-12">
 					<div class="row col-xs-12">
-						<div class="col-md-2"><label for="proxy_login">Login</label></div>
-						<div class="col-xs-6">
-							<input type="text" class="form-control" name="proxy_login" value="{{proxy.login}}">
+                        <div class="col-xs-1">&nbsp;</div>
+						<div class="col-xs-4"><label for="proxy_login">Login</label></div>
+						<div class="col-xs-7">
+							<input type="text" class="form-control" name="proxy_login" value="{{proxy.User}}">
 						</div>
 					</div>
 					<div class="row col-xs-12">
-						<div class="col-md-2"><label for="proxy_password">Password</label></div>
-						<div class="col-xs-6">
-							<input type="text" class="form-control" name="proxy_password" value="{{proxy.password}}">
+                        <div class="col-xs-1">&nbsp;</div>
+						<div class="col-xs-4"><label for="proxy_password">Password</label></div>
+						<div class="col-xs-7">
+							<input type="password" class="form-control" name="proxy_password" value="{{proxy.Password}}">
 						</div>
 					</div>
 					<div class="row col-xs-12">
-						<div class="col-md-2"><label for="proxy_gateway">Gateway</label></div>
-						<div class="col-xs-6">
-							<input type="text" class="form-control" name="proxy_gateway" value="{{proxy.gateway}}">
+                        <div class="col-xs-1">&nbsp;</div>
+						<div class="col-xs-4"><label for="proxy_gateway">Gateway</label></div>
+						<div class="col-xs-7">
+							<input type="text" class="form-control" name="proxy_gateway" value="{{proxy.Server}}">
 						</div>
 					</div>
 					<div class="row col-xs-12">
-						<div class="col-md-2"><label for="proxy_gateway_port">Port</label></div>
-						<div class="col-xs-6">
-							<input type="text" class="form-control" name="proxy_gateway_port" value="{{proxy.gateway_port}}">
+                        <div class="col-xs-1">&nbsp;</div>
+						<div class="col-xs-4"><label for="proxy_gateway_port">Port</label></div>
+						<div class="col-xs-7">
+							<input type="text" class="form-control" name="proxy_gateway_port" value="{{proxy.Port}}">
 						</div>
 					</div>
 				</div>
 	
-				<div class="row spacer">
-					<button type="submit" id="updateDataSource" class='btn btn-success col-md-3'>Update Configuration</button>
+				<div class="row col-xs-12">
+                    <div class="row-spacer">
+                        <p>&nbsp;</p>
+                    </div>
+
+                    <div class="col-xs-4">&nbsp;</div>
+                    <div class="col-xs-8">
+                        <button type="submit" id="updateDataSource" class='btn btn-success col-xs-6'>Update Configuration</button>
+                    </div>
 				</div>
 				
 				</div>
@@ -238,12 +320,19 @@
 					if (val===0) { // 0 means static ethernet
 						$('.ethernet_static').show();
 						$('.wifi_dhcp').hide();
-					} else if (val===1) { //ethernet dhcp 
+						$('.wifi_static').hide();
+					} else if (val===1) { //1 ethernet dhcp 
 						$('.ethernet_static').hide();
 						$('.wifi_dhcp').hide();
-					} else if (val===2) { // wifi dhcp
+						$('.wifi_static').hide();
+					} else if (val===2) { // 2 wifi static 
+						$('.ethernet_static').hide();
+						$('.wifi_dhcp').hide();
+						$('.wifi_static').show();
+					} else if (val===3) { // 3 wifi dhcp 
 						$('.ethernet_static').hide();
 						$('.wifi_dhcp').show();
+						$('.wifi_static').hide();
 					}
 				};
 

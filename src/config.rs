@@ -24,7 +24,6 @@ pub struct Config {
     pub ui_directory: PathBuf,
 
     //kcf section
-    pub hotspot_interface: String, // interface to run the wlan hotspot on.
     pub config_file_path: String,
     pub auth_file_path: String,
 }
@@ -103,14 +102,6 @@ pub fn get_config() -> Config {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("hotspot-interface")
-                .short("hs")
-                .long("hotspot-interface")
-                .value_name("hotspot_interface")
-                .help("Wifi device used to run the hotspot (e.g wlan1)")
-                .takes_value(true),
-        )
-        .arg(
             Arg::with_name("config-file")
                 .short("f")
                 .long("config-file")
@@ -128,7 +119,7 @@ pub fn get_config() -> Config {
         )
         .get_matches();
 
-    let interface: Option<String> = matches.value_of("portal-interface").map_or_else(
+    let mut interface: Option<String> = matches.value_of("portal-interface").map_or_else(
         || env::var("PORTAL_INTERFACE").ok(),
         |v| Some(v.to_string()),
     );
@@ -159,20 +150,24 @@ pub fn get_config() -> Config {
     )).expect("Cannot parse activity timeout");
 
     //kcf specific
-    let hotspot_interface = matches.value_of("hotspot-interface").map_or_else(
-        || env::var("HOTSPOT_INTERFACE").unwrap_or_else(|_| DEFAULT_HOTSPOT_INTERFACE.to_string()),
-        String::from,
-    );
-    let config_file_path = matches.value_of("config-file").map_or_else(
-        || env::var("CONFIG_FILE").unwrap_or_else(|_| DEFAULT_CONFIG_FILE_PATH.to_string()),
-        String::from,
-    );
-    let auth_file_path = matches.value_of("auth-file").map_or_else(
-        || env::var("AUTH_FILE").unwrap_or_else(|_| DEFAULT_AUTH_FILE_PATH.to_string()),
-        String::from,
-    );
-
+    let config_file_path = matches.value_of("config-file").expect("Must pass in the path to the config file");
+    let auth_file_path = matches.value_of("auth-file").expect("Must pass in the path to the auth file");
     let ui_directory = get_ui_directory(matches.value_of("ui-directory"));
+
+    // parse out the hotspot interface from the config file, if portal-interface exists
+    // let it override the config file
+    if interface.is_none() {
+        let config_data = match load_diagnostics_config_file(&config_file_path) {
+            Ok(config) => config,
+            Err(e) => panic!(
+                "Failed to read configuration file -> {}! e={:?}\n",
+                config_file_path, e
+            ),
+        };
+
+        //set the interface to the one in the config file
+        interface = Some(config_data.network_interfaces.hotspot);
+    }
 
     Config {
         interface,
@@ -182,9 +177,8 @@ pub fn get_config() -> Config {
         dhcp_range,
         activity_timeout,
         ui_directory,
-        hotspot_interface,
-        config_file_path,
-        auth_file_path,
+        config_file_path: config_file_path.to_string(),
+        auth_file_path: auth_file_path.to_string(),
     }
 }
 

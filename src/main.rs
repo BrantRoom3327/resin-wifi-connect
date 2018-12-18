@@ -1,66 +1,77 @@
-#![cfg_attr(feature = "clippy", feature(plugin))]
-#![cfg_attr(feature = "clippy", plugin(clippy))]
+#![recursion_limit = "1024"]
+
+#[macro_use]
+extern crate log;
+
+#[macro_use]
+extern crate error_chain;
 
 extern crate clap;
+extern crate env_logger;
+extern crate iron;
+extern crate mount;
+extern crate network_manager;
+extern crate nix;
+extern crate params;
+extern crate persistent;
+extern crate router;
 extern crate cookie;
 #[macro_use]
 extern crate enum_primitive;
-extern crate env_logger;
 extern crate handlebars;
 extern crate handlebars_iron as hbs;
-extern crate iron;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate log;
-extern crate mount;
-extern crate network_manager;
 extern crate num;
-extern crate params;
-extern crate persistent;
 extern crate rand;
-extern crate regex;
-extern crate router;
+extern crate time;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
 extern crate staticfile;
-extern crate time;
 
+mod errors;
 mod config;
 mod network;
 mod server;
 mod dnsmasq;
 mod logger;
+mod exit;
 mod kcf;
 
-#[cfg(target_os = "linux")]
-mod linux;
-
-#[cfg(target_os = "macos")]
-mod macos;
-
-use std::error::Error;
 use std::path;
 use std::thread;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::channel;
+use std::io::Write;
+use std::process;
 
+use errors::*;
 use config::get_config;
 use network::{init_networking, process_network_commands};
-
-pub type ExitResult = Result<(), String>;
-
-pub fn exit(exit_tx: &Sender<ExitResult>, error: String) {
-    let _ = exit_tx.send(Err(error));
-}
+use exit::block_exit_signals;
 
 fn main() {
+    if let Err(ref e) = run() {
+        let stderr = &mut ::std::io::stderr();
+        let errmsg = "Error writing to stderr";
+
+        writeln!(stderr, "\x1B[1;31mError: {}\x1B[0m", e).expect(errmsg);
+
+        for inner in e.iter().skip(1) {
+            writeln!(stderr, "  caused by: {}", inner).expect(errmsg);
+        }
+
+        process::exit(exit_code(e));
+    }
+}
+
+fn run() -> Result<()> {
+    block_exit_signals()?;
+
     logger::init();
 
     let config = get_config();
 
-    init_networking();
+    init_networking()?;
 
     let (exit_tx, exit_rx) = channel();
 
@@ -69,11 +80,13 @@ fn main() {
     });
 
     match exit_rx.recv() {
-        Ok(result) => {
-            if let Err(reason) = result {
-                error!("{}", reason);
-            }
+        Ok(result) => if let Err(reason) = result {
+            return Err(reason);
         },
-        Err(e) => error!("Exit receiver error: {}", e.description()),
+        Err(e) => {
+            return Err(e.into());
+        },
     }
+
+    Ok(())
 }

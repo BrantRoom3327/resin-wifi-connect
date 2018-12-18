@@ -1,9 +1,10 @@
-FROM resin/%%RESIN_MACHINE_NAME%%-debian
+FROM resin/raspberrypi3-debian:stretch
 
 ENV INITSYSTEM on
 
 RUN apt-get update \
-    && apt-get install -y dnsmasq wireless-tools \
+    && apt-get install -y dnsmasq wireless-tools vim file udhcpd network-manager \
+    && systemctl mask NetworkManager.service \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -13,8 +14,9 @@ WORKDIR /usr/src/app
 
 #pack it up
 COPY ui ui/
-COPY data data/
-COPY start start
-COPY target/x86_64-unknown-linux-gnu/release/wifi-connect .
+COPY config config/
+COPY kcf_scripts kcf_scripts/
+COPY scripts/start.sh .
+COPY target/armv7-unknown-linux-gnueabihf/release/wifi-connect .
 
-CMD ["bash", "start"]
+CMD ["bash", "start.sh"]

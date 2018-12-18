@@ -1,11 +1,11 @@
 [package]
 name = "wifi-connect"
-version = "4.0.0"
+version = "4.0.6"
 authors = ["Zahari Petkov <zahari@resin.io>", "Aaron Brodersen <aaron@resin.io>, Brant Rosenberger <brant@room3327.com>"]
 description = "Easy WiFi setup for Linux devices from your mobile phone or laptop"
 
 [dependencies]
-network-manager = "0.8"
+network-manager = "0.9.1"
 clap = "2.24"
 iron = "0.5"
 staticfile = "0.4"
@@ -23,14 +23,13 @@ handlebars-iron = "0.25"
 handlebars = "0.29"
 time = "0.1"
 rand = "0.4"
-regex = "0.2"
-lazy_static = "1.0"
 enum_primitive = "0.1"
 num = "0.1"
+nix = "0.10"
 
-[dependencies.clippy]
-version = "*"
-optional = true
+[dependencies.error-chain]
+version = "0.11"
+default-features = false
 
 [profile.release]
 lto = true
@@ -40,7 +39,6 @@ features = ["secure", "percent-encode"]
 
 [features]
 no_hotspot = []
-etc_network_interfaces = []
 watch = ["handlebars-iron/watch"]
 
 

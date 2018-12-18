@@ -1,0 +1,25 @@
+{
+  "cloud_storage_enabled": false,
+  "data_destination_url": "https://c.kcftech.com/restup",
+  "network_configuration_type": 0,
+  "cookie_key": "655A6F61795598A5B55C71D6C2BB17983AA38F6C8418DBCAB9572660E6567DA6",
+  "network_interfaces": {
+    "collector_ethernet": "enp1s0",
+    "collector_wifi": "wlp4s0",
+    "static_streaming_ethernet": "enp2s0",
+    "hotspot": "wlp5s0"
+  },
+  "output_files": {
+    "configure_networking": "/data/configure-networking.sh",
+    "collector_xml_file": "/data/collectorsettings.xml"
+  },
+  "scripts": {
+    "get_ip": "/usr/src/app/kcf_scripts/get_ip.sh",
+    "get_netmask": "/usr/src/app/kcf_scripts/get_netmask.sh",
+    "get_dns": "/usr/src/app/kcf_scripts/get_dns.sh",
+    "get_gateway": "/usr/src/app/kcf_scripts/get_gateway.sh",
+    "reboot": "/usr/src/app/kcf_scripts/reboot.sh",
+    "networking_stub": "/usr/src/app/kcf_scripts/networking-stub.sh"
+  },
+  "templates_dir": "/usr/src/app/ui/templates/"
+}

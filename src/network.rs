@@ -1,5 +1,4 @@
 use std::thread;
-use std::process;
 use std::time::Duration;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::error::Error;
@@ -9,7 +8,8 @@ use std::net::Ipv4Addr;
 use network_manager::{AccessPoint, Connection, ConnectionState, Connectivity, Device, DeviceType,
                       NetworkManager, ServiceState};
 
-use {exit, ExitResult};
+use errors::*;
+use exit::{exit, trap_exit_signals, ExitResult};
 use config::Config;
 use dnsmasq::start_dnsmasq;
 use server::start_server;
@@ -17,6 +17,7 @@ use server::start_server;
 pub enum NetworkCommand {
     Activate,
     Timeout,
+    Exit,
     Connect { ssid: String, passphrase: String },
 }
 
@@ -42,9 +43,12 @@ struct NetworkCommandHandler {}
 
 impl NetworkCommandHandler {
     #[cfg(not(feature = "no_hotspot"))]
-    fn new(config: &Config, exit_tx: &Sender<ExitResult>) -> Result<Self, String> {
-        let manager = NetworkManager::new();
+    fn new(config: &Config, exit_tx: &Sender<ExitResult>) -> Result<Self> {
+        let (network_tx, network_rx) = channel();
 
+        Self::spawn_trap_exit_signals(exit_tx, network_tx.clone());
+
+        let manager = NetworkManager::new();
         debug!("NetworkManager connection initialized");
 
         let device = find_device(&manager, &config.interface)?;
@@ -56,7 +60,6 @@ impl NetworkCommandHandler {
         let dnsmasq = start_dnsmasq(config, &device)?;
 
         let (server_tx, server_rx) = channel();
-        let (network_tx, network_rx) = channel();
 
         Self::spawn_server(config, exit_tx, server_rx, network_tx.clone());
 
@@ -80,7 +83,7 @@ impl NetworkCommandHandler {
 
     // non hotspot new
     #[cfg(feature = "no_hotspot")]
-    fn new(config: &Config, exit_tx: &Sender<ExitResult>) -> Result<Self, String> {
+    fn new(config: &Config, exit_tx: &Sender<ExitResult>) -> Result<Self> {
         let (_server_tx, server_rx) = channel();
         let (network_tx, network_rx) = channel();
         Self::spawn_server(config, exit_tx, server_rx, network_tx.clone());
@@ -132,6 +135,21 @@ impl NetworkCommandHandler {
         });
     }
 
+    fn spawn_trap_exit_signals(exit_tx: &Sender<ExitResult>, network_tx: Sender<NetworkCommand>) {
+        let exit_tx_trap = exit_tx.clone();
+
+        thread::spawn(move || {
+            if let Err(e) = trap_exit_signals() {
+                exit(&exit_tx_trap, e);
+                return;
+            }
+
+            if let Err(err) = network_tx.send(NetworkCommand::Exit) {
+                error!("Sending NetworkCommand::Exit failed: {}", err.description());
+            }
+        });
+    }
+
     fn run(&mut self, exit_tx: &Sender<ExitResult>) {
         #[cfg(not(feature = "no_hotspot"))]
         {
@@ -155,6 +173,10 @@ impl NetworkCommandHandler {
                         return Ok(());
                     }
                 },
+                NetworkCommand::Exit => {
+                    info!("Exiting...");
+                    return Ok(());
+                },
                 NetworkCommand::Connect { ssid, passphrase } => {
                     if self.connect(&ssid, &passphrase)? {
                         return Ok(());
@@ -165,16 +187,13 @@ impl NetworkCommandHandler {
     }
 
     #[cfg(not(feature = "no_hotspot"))]
-    fn receive_network_command(&self) -> Result<NetworkCommand, String> {
+    fn receive_network_command(&self) -> Result<NetworkCommand> {
         match self.network_rx.recv() {
             Ok(command) => Ok(command),
             Err(e) => {
                 // Sleep for a second, so that other threads may log error info.
                 thread::sleep(Duration::from_secs(1));
-                Err(format!(
-                    "Receiving network command failed: {}",
-                    e.description()
-                ))
+                Err(e).chain_err(|| ErrorKind::RecvNetworkCommand)
             },
         }
     }
@@ -196,21 +215,15 @@ impl NetworkCommandHandler {
 
         let access_points_ssids = get_access_points_ssids_owned(&self.access_points);
 
-        if let Err(e) = self.server_tx
+        self.server_tx
             .send(NetworkCommandResponse::AccessPointsSsids(
                 access_points_ssids,
-            )) {
-            return Err(format!(
-                "Sending access point ssids results failed: {}",
-                e.description()
-            ));
-        }
-
-        Ok(())
+            ))
+            .chain_err(|| ErrorKind::SendAccessPointSSIDs)
     }
 
     #[cfg(not(feature = "no_hotspot"))]
-    fn connect(&mut self, ssid: &str, passphrase: &str) -> Result<bool, String> {
+    fn connect(&mut self, ssid: &str, passphrase: &str) -> Result<bool> {
         delete_connection_if_exists(&self.manager, ssid);
 
         if let Some(ref connection) = self.portal_connection {
@@ -279,28 +292,31 @@ pub fn process_network_commands(config: &Config, exit_tx: &Sender<ExitResult>) {
     command_handler.run(exit_tx);
 }
 
-pub fn init_networking() {
+pub fn init_networking() -> Result<()> {
     #[cfg(not(feature = "no_hotspot"))]
     {
-        start_network_manager_service();
+        start_network_manager_service()?;
 
-        if let Err(err) = delete_access_point_profiles() {
-            error!("Stopping access point failed: {}", err);
-            process::exit(1);
-        }
+        delete_access_point_profiles().chain_err(|| ErrorKind::DeleteAccessPoint)
+    }
+    #[cfg(feature = "no_hotspot")]
+    {
+        Ok(())
     }
 }
 
 #[cfg(not(feature = "no_hotspot"))]
-pub fn find_device(manager: &NetworkManager, interface: &Option<String>) -> Result<Device, String> {
+pub fn find_device(manager: &NetworkManager, interface: &Option<String>) -> Result<Device> {
     if let Some(ref interface) = *interface {
-        let device = manager.get_device_by_interface(interface)?;
+        let device = manager
+            .get_device_by_interface(interface)
+            .chain_err(|| ErrorKind::DeviceByInterface(interface.clone()))?;
 
         if *device.device_type() == DeviceType::WiFi {
             info!("Targeted WiFi device: {}", interface);
             Ok(device)
         } else {
-            Err(format!("Not a WiFi device: {}", interface))
+            bail!(ErrorKind::NotAWiFiDevice(interface.clone()))
         }
     } else {
         let devices = manager.get_devices()?;
@@ -313,18 +329,18 @@ pub fn find_device(manager: &NetworkManager, interface: &Option<String>) -> Resu
             info!("WiFi device: {}", devices[index].interface());
             Ok(devices[index].clone())
         } else {
-            Err("Cannot find a WiFi device".to_string())
+            bail!(ErrorKind::NoWiFiDevice)
         }
     }
 }
 
 #[cfg(not(feature = "no_hotspot"))]
-fn get_access_points(device: &Device) -> Result<Vec<AccessPoint>, String> {
-    get_access_points_impl(device).map_err(|e| format!("Getting access points failed: {}", e))
+fn get_access_points(device: &Device) -> Result<Vec<AccessPoint>> {
+    get_access_points_impl(device).chain_err(|| ErrorKind::NoAccessPoints)
 }
 
 #[cfg(not(feature = "no_hotspot"))]
-fn get_access_points_impl(device: &Device) -> Result<Vec<AccessPoint>, String> {
+fn get_access_points_impl(device: &Device) -> Result<Vec<AccessPoint>> {
     let retries_allowed = 10;
     let mut retries = 0;
 
@@ -383,11 +399,11 @@ fn find_access_point<'a>(access_points: &'a [AccessPoint], ssid: &str) -> Option
 }
 
 #[cfg(not(feature = "no_hotspot"))]
-fn create_portal(device: &Device, config: &Config) -> Result<Connection, String> {
+fn create_portal(device: &Device, config: &Config) -> Result<Connection> {
     let portal_passphrase = config.passphrase.as_ref().map(|p| p as &str);
 
     create_portal_impl(device, &config.ssid, &config.gateway, &portal_passphrase)
-        .map_err(|e| format!("Creating the captive portal failed: {}", e))
+        .chain_err(|| ErrorKind::CreateCaptivePortal)
 }
 
 #[cfg(not(feature = "no_hotspot"))]
@@ -396,7 +412,7 @@ fn create_portal_impl(
     ssid: &str,
     gateway: &Ipv4Addr,
     passphrase: &Option<&str>,
-) -> Result<Connection, String> {
+) -> Result<Connection> {
     info!("Starting access point...");
     let wifi_device = device.as_wifi_device().unwrap();
     let (portal_connection, _) = wifi_device.create_hotspot(ssid, *passphrase, Some(*gateway))?;
@@ -405,13 +421,12 @@ fn create_portal_impl(
 }
 
 #[cfg(not(feature = "no_hotspot"))]
-fn stop_portal(connection: &Connection, config: &Config) -> Result<(), String> {
-    stop_portal_impl(connection, config)
-        .map_err(|e| format!("Stopping the access point failed: {}", e))
+fn stop_portal(connection: &Connection, config: &Config) -> Result<()> {
+    stop_portal_impl(connection, config).chain_err(|| ErrorKind::StopAccessPoint)
 }
 
 #[cfg(not(feature = "no_hotspot"))]
-fn stop_portal_impl(connection: &Connection, config: &Config) -> Result<(), String> {
+fn stop_portal_impl(connection: &Connection, config: &Config) -> Result<()> {
     info!("Stopping access point '{}'...", config.ssid);
     connection.deactivate()?;
     connection.delete()?;
@@ -421,7 +436,7 @@ fn stop_portal_impl(connection: &Connection, config: &Config) -> Result<(), Stri
 }
 
 #[cfg(not(feature = "no_hotspot"))]
-fn wait_for_connectivity(manager: &NetworkManager, timeout: u64) -> Result<bool, String> {
+fn wait_for_connectivity(manager: &NetworkManager, timeout: u64) -> Result<bool> {
     let mut total_time = 0;
 
     loop {
@@ -455,43 +470,26 @@ fn wait_for_connectivity(manager: &NetworkManager, timeout: u64) -> Result<bool,
 }
 
 #[cfg(not(feature = "no_hotspot"))]
-pub fn start_network_manager_service() {
-    match NetworkManager::get_service_state() {
-        Ok(state) => {
-            if state != ServiceState::Active {
-                match NetworkManager::start_service(15) {
-                    Ok(state) => {
-                        if state != ServiceState::Active {
-                            error!(
-                                "Cannot start the NetworkManager service with active state: {:?}",
-                                state
-                            );
-                            process::exit(1);
-                        } else {
-                            info!("NetworkManager service started successfully");
-                        }
-                    },
-                    Err(err) => {
-                        error!(
-                            "Starting the NetworkManager service state failed: {:?}",
-                            err
-                        );
-                        process::exit(1);
-                    },
-                }
-            } else {
-                debug!("NetworkManager service already running");
-            }
-        },
-        Err(err) => {
-            error!("Getting the NetworkManager service state failed: {:?}", err);
-            process::exit(1);
-        },
+pub fn start_network_manager_service() -> Result<()> {
+    let state =
+        NetworkManager::get_service_state().chain_err(|| ErrorKind::NetworkManagerServiceState)?;
+
+    if state != ServiceState::Active {
+        let state = NetworkManager::start_service(15).chain_err(|| ErrorKind::StartNetworkManager)?;
+        if state != ServiceState::Active {
+            bail!(ErrorKind::StartActiveNetworkManager);
+        } else {
+            info!("NetworkManager service started successfully");
+        }
+    } else {
+        debug!("NetworkManager service already running");
     }
+
+    Ok(())
 }
 
 #[cfg(not(feature = "no_hotspot"))]
-fn delete_access_point_profiles() -> Result<(), String> {
+fn delete_access_point_profiles() -> Result<()> {
     let manager = NetworkManager::new();
 
     let connections = manager.get_connections()?;

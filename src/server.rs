@@ -1,7 +1,7 @@
 use std::sync::mpsc::{Receiver, Sender};
-use std::error::Error;
 use std::fmt;
 use std::net::Ipv4Addr;
+use std::error::Error as StdError;
 
 use serde_json;
 use path::PathBuf;
@@ -15,8 +15,9 @@ use mount::Mount;
 use persistent::Write;
 use params::{FromValue, Params};
 
+use errors::*;
 use network::{NetworkCommand, NetworkCommandResponse};
-use {exit, ExitResult};
+use exit::{exit, ExitResult};
 
 //kcf imports
 use rand::*;
@@ -47,7 +48,7 @@ impl fmt::Display for StringError {
     }
 }
 
-impl Error for StringError {
+impl StdError for StringError {
     fn description(&self) -> &str {
         &*self.0
     }
@@ -97,13 +98,17 @@ macro_rules! get_request_state {
     )
 }
 
-macro_rules! exit_with_error {
-    ($state:ident, $desc:expr) => (
-        {
-            exit(&$state.exit_tx, $desc.clone());
-            return Err(IronError::new(StringError($desc), status::InternalServerError));
-        }
-    )
+fn exit_with_error<E>(state: &RequestSharedState, e: E, e_kind: ErrorKind) -> IronResult<Response>
+where
+    E: ::std::error::Error + Send + 'static,
+{
+    let description = e_kind.description().into();
+    let err = Err::<Response, E>(e).chain_err(|| e_kind);
+    exit(&state.exit_tx, err.unwrap_err());
+    Err(IronError::new(
+        StringError(description),
+        status::InternalServerError,
+    ))
 }
 
 struct RedirectMiddleware;
@@ -156,6 +161,12 @@ pub fn start_server(
         Err(e) => panic!("Failed to read auth file -> {} !\n", e),
     };
 
+    match all_file_deps_exist(&config_data) {
+        Ok(()) => (),
+        Err(e) => panic!("Failed to find all templates! {:?}\n", e),
+    };
+    let templates_dir_clone = config_data.templates_dir.clone();
+
     // make sure we have a valid cookie seed value.  Needs to be 256 bits.
     // Since its stored as a string we convert 2 chars per string to our 32 bytes of data.
     if config_data.cookie_key.len() != 64 {
@@ -190,14 +201,16 @@ pub fn start_server(
         auth_file_path,
         auth_data,
         ethernet_static_network_settings: NetworkSettings::new("invalid".to_string()),
-        wifi_dhcp_network_settings: WifiAPSettings::new(),
+        wifi_network_settings: WifiSettings::new("invalid".to_string()),  //do we know the network interface name yet?
+        shutting_down: false,
+        proxy_settings: ProxySettings::new(),
     };
 
     let request_state = RequestSharedState {
         gateway,
         server_rx,
         network_tx,
-        exit_tx,
+        exit_tx: exit_tx,
         kcf,
     };
 
@@ -211,6 +224,7 @@ pub fn start_server(
     router.get(ROUTE_SHOW_STATUS, http_route_get_status, "showstatus");
     router.post(ROUTE_AUTH, http_route_do_auth, "auth");
     router.post(ROUTE_SET_CONFIG, http_route_set_config, "setconfig");
+    router.post(ROUTE_RESTART, http_route_restart, "restart");
     // end kcf routes
 
     let mut assets = Mount::new();
@@ -222,9 +236,8 @@ pub fn start_server(
     // handlebar style templates
     let mut hbse = HandlebarsEngine::new();
 
-    //path for templates.
-    let template_path = ui_directory.to_str().unwrap().to_string() + TEMPLATE_DIR;
-    hbse.add(Box::new(DirectorySource::new(PathBuf::from(template_path), PathBuf::from(".hbs"))));
+    // load templates
+    hbse.add(Box::new(DirectorySource::new(PathBuf::from(templates_dir_clone), PathBuf::from(".hbs"))));
 
     if let Err(r) = hbse.reload() {
         panic!("{}", r);
@@ -243,11 +256,7 @@ pub fn start_server(
     if let Err(e) = Iron::new(chain).http(&http_server_address_clone) {
         exit(
             &exit_tx_clone,
-            format!(
-                "Cannot start HTTP server on '{}': {}",
-                &http_server_address_clone,
-                e.description()
-            ),
+            ErrorKind::StartHTTPServer(http_server_address_clone, e.description().into()).into(),
         );
     }
 }
@@ -257,38 +266,20 @@ fn ssid(req: &mut Request) -> IronResult<Response> {
 
     let request_state = get_request_state!(req);
 
-    if let Err(err) = request_state.network_tx.send(NetworkCommand::Activate) {
-        exit_with_error!(
-            request_state,
-            format!(
-                "Sending NetworkCommand::Activate failed: {}",
-                err.description()
-            )
-        );
+    if let Err(e) = request_state.network_tx.send(NetworkCommand::Activate) {
+        return exit_with_error(&request_state, e, ErrorKind::SendNetworkCommandActivate);
     }
 
     let access_points_ssids = match request_state.server_rx.recv() {
         Ok(result) => match result {
             NetworkCommandResponse::AccessPointsSsids(ssids) => ssids,
         },
-        Err(err) => exit_with_error!(
-            request_state,
-            format!(
-                "Receiving access points ssids failed: {}",
-                err.description()
-            )
-        ),
+        Err(e) => return exit_with_error(&request_state, e, ErrorKind::RecvAccessPointSSIDs),
     };
 
     let access_points_json = match serde_json::to_string(&access_points_ssids) {
         Ok(json) => json,
-        Err(err) => exit_with_error!(
-            request_state,
-            format!(
-                "Serializing access points ssids failed: {}",
-                err.description()
-            )
-        ),
+        Err(e) => return exit_with_error(&request_state, e, ErrorKind::SerializeAccessPointSSIDs),
     };
 
     Ok(Response::with((status::Ok, access_points_json)))
@@ -311,17 +302,11 @@ fn connect(req: &mut Request) -> IronResult<Response> {
         passphrase: passphrase,
     };
 
-    if let Err(err) = request_state.network_tx.send(command) {
-        exit_with_error!(
-            request_state,
-            format!(
-                "Sending NetworkCommand::Connect failed: {}",
-                err.description()
-            )
-        );
+    if let Err(e) = request_state.network_tx.send(command) {
+        exit_with_error(&request_state, e, ErrorKind::SendNetworkCommandConnect)
+    } else {
+        Ok(Response::with(status::Ok))
     }
-
-    Ok(Response::with(status::Ok))
 }
 
 //
@@ -337,27 +322,19 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
     let login = get_param!(params, "proxy_login", String);
     let password = get_param!(params, "proxy_password", String);
     let gateway = get_param!(params, "proxy_gateway", String);
-    let gateway_port = get_param!(params, "proxy_gateway_port", u16);
-    let proxy = ProxySettings {
-        enabled: enabled,
-        login: login,
-        password: password,
-        gateway: gateway,
-        gateway_port: gateway_port,
-    };
+    let port = get_param!(params, "proxy_gateway_port", u16);
+    let proxy = ProxySettings::init(enabled, login, password, gateway, port);
 
     //see NetworkCfgType for the allowed values.
     let network_configuration_type = get_param!(params, "network_configuration_type", u8);
 
-    // wifi settings
+    // settings
     let wifi_ssid = get_param!(params, "wifi_ssid", String);
     let wifi_passphrase = get_param!(params, "wifi_passphrase", String);
-
-    // the static ethernet settings
-    let ethernet_ip_address = get_param!(params, "ethernet_ip_address", String);
-    let ethernet_subnet_mask = get_param!(params, "ethernet_subnet_mask", String);
-    let ethernet_gateway = get_param!(params, "ethernet_gateway", String);
-    let ethernet_dns = get_param!(params, "ethernet_dns", String);
+    let ip_address = get_param!(params, "ip_address", String);
+    let subnet_mask = get_param!(params, "subnet_mask", String);
+    let gateway = get_param!(params, "gateway", String);
+    let dns = get_param!(params, "dns", String);
 
     Ok(SetConfigOptionsFromPost {
         cloud_storage_enabled,
@@ -366,10 +343,10 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
         network_configuration_type,
         wifi_ssid,
         wifi_passphrase,
-        ethernet_ip_address,
-        ethernet_subnet_mask,
-        ethernet_gateway,
-        ethernet_dns,
+        ip_address,
+        subnet_mask,
+        gateway,
+        dns,
     })
 }
 
@@ -381,19 +358,41 @@ pub fn collect_do_auth_options(req: &mut Request) -> IronResult<Auth> {
     Ok(Auth { username, password })
 }
 
-pub fn get_kcf_runtime_data(req: &mut Request) -> Result<RuntimeData, IronError> {
+pub fn get_kcf_runtime_data(req: &mut Request) -> IronResult<RuntimeData> {
     let state = get_request_state!(req);
     Ok(state.kcf.clone())
 }
 
+pub fn exit_http_server(req: &mut Request) -> IronResult<()> {
+    let request_state = get_request_state!(req);
+    println!("Shutdown the webserver at user's request!");
+
+    if let Err(e) = request_state.network_tx.send(NetworkCommand::Exit) {
+        exit_with_error(&request_state, e, ErrorKind::SendNetworkCommandActivate)?;
+    }
+
+    Ok(())
+}
+
 // inject ethernet settings into runtime data.
-pub fn inject_to_runtime(req: &mut Request, ethernet_settings: NetworkSettings) -> Result<(), IronError> {
+pub fn inject_ethernet_static_settings(req: &mut Request, ethernet_settings: NetworkSettings) -> IronResult<()> {
     let wr = match req.get::<Write<RequestSharedState>>() {
         Ok(wr) => wr,
         Err(_e) => return Err(IronError::new(StringError("Could not get request shared state".to_string()), status::InternalServerError)),
     };
 
     wr.as_ref().lock().unwrap().kcf.ethernet_static_network_settings = ethernet_settings;
+
+    Ok(())
+}
+
+pub fn set_shutdown(req: &mut Request) -> IronResult<()> {
+    let wr = match req.get::<Write<RequestSharedState>>() {
+        Ok(wr) => wr,
+        Err(_e) => return Err(IronError::new(StringError("Could not get request shared state".to_string()), status::InternalServerError)),
+    };
+
+    wr.as_ref().lock().unwrap().kcf.shutting_down = true;
 
     Ok(())
 }

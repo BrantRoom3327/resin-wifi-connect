@@ -1,0 +1,17 @@
+#!/bin/bash
+#export the correct interface handles based on the system we are running on.
+
+#figure out if we are running on a pi or intel board and change interfaces accordingly
+unamestr=`uname -m`
+
+if [[ "$unamestr" == 'armv7l' ]]; then
+    export ETH0="eth0"
+    export ETH1="eth1"
+    export WLAN0="wlan0"
+    export WLAN1="wlan1"
+else
+    export ETH0="enp1s0"
+    export ETH1="enp2s0"
+    export WLAN0="wlp4s0"
+    export WLAN1="wlx74da38db36c3"
+fi

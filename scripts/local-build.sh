@@ -11,10 +11,8 @@ TARGET=$1
 ARCH=$2
 
 cross() {
-    docker run -it --rm -v $PWD:/work $TARGET "$@"
+    docker run -it --rm -v $PWD:/work majorz/rust-$ARCH:rust-1.23.0 "$@"
 }
-
-docker build -t $TARGET scripts/docker/$TARGET
 
 cross cargo build --release --target=$TARGET
 
