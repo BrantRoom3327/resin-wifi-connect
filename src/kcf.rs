@@ -1017,8 +1017,7 @@ fn write_wifi_settings(wifi: &WifiSettings, disable_autoconnect: bool, metric: O
 
     //if we are doing static add all the network config
     if !wifi.settings.dhcp_enabled {
-        returnString.push_str(&format!("--interface_type=wifi --method=static --interface_name={} --ip_address={} --gateway={} ",
-                         wifi.settings.adapter_name, wifi.settings.ip_address, wifi.settings.gateway));
+        returnString.push_str(&format!(" --ip_address={} --gateway={} ", wifi.settings.ip_address, wifi.settings.gateway));
 
         let mut entries = String::new();
         for i in &wifi.settings.dns {
@@ -1026,8 +1025,6 @@ fn write_wifi_settings(wifi: &WifiSettings, disable_autoconnect: bool, metric: O
         }
         returnString = format!("{} --dns_entries='{}' ", returnString, entries);
     }
-
-    //println!("string so far 2 -> {}", returnString);
 
     if let Some(ref m) = metric {
         returnString.push_str(&format!(" --metric={}", m));
