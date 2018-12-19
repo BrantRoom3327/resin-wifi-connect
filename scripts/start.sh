@@ -29,5 +29,5 @@ unamestr=`uname -m`
 if [[ "$unamestr" == 'armv7l' ]]; then
     ./wifi-connect --portal-ssid=QuarterMaster --config-file=config/cfg.rpi3.resin --auth-file=config/auth.json
 else
-    ./wifi-connect --portal-ssid=QuarterMaster --config-file=config/cfg.intel.resin --auth-file=config/auth.json
+    ./wifi-connect --portal-ssid=QuarterMaster --config-file=config/cfg.intel --auth-file=config/auth.json
 fi
