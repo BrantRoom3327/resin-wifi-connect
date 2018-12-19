@@ -7,8 +7,11 @@ fi
 
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
-    nmcli con show $1 | grep ipv4.dns: | awk '{print $2}'
+    ifconfig $1 | grep Mask: | awk '{print $4}' | cut -d : -f 2
 elif [[ "$unamestr" == 'Darwin' ]]; then
     echo "8.8.8.8"
 fi
 
+
+#fedora
+#    nmcli con show $1 | grep ipv4.dns: | awk '{print $2}'
