@@ -807,7 +807,6 @@ pub fn http_route_get_status(req: &mut Request) -> IronResult<Response> {
 }
 
 pub fn get_network_settings(config_data: &SmartDiagnosticsConfig, adapter_name: &str) -> Option<NetworkSettings> {
-    info!("get_network_settings()\n");
     let ip_address = get_ip_for_adapter(config_data, adapter_name)?;
     let netmask = get_netmask_for_adapter(config_data, adapter_name)?;
     let gateway = get_gateway_for_adapter(config_data, adapter_name)?;
@@ -1105,7 +1104,7 @@ pub fn get_netmask_for_adapter(config_data: &SmartDiagnosticsConfig, adapter_nam
 
     let mut stdout = String::from_utf8(output.stdout).unwrap();
     stdout = stdout.trim().to_string();
-    info!("netmask: {}", stdout);
+    info!("get_netmask_for_adapter stdout -> {}\n", stdout);
 
     match Ipv4Addr::from_str(&stdout) {
         Ok(eth) => return Some(eth),

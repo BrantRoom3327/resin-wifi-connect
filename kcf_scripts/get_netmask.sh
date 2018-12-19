@@ -7,7 +7,7 @@ fi
 
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
-    ifconfig $1 | grep Mask: | awk '{print $4}' | cut -d : -f 2
+    ifconfig $1 | grep Mask: | awk '{print $4}' | cut -d ':' -f 2
 elif [[ "$unamestr" == 'Darwin' ]]; then
     echo "255.255.255.0"
 fi
