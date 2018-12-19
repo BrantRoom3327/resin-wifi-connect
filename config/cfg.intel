@@ -23,5 +23,5 @@
     "configure_connection": "/usr/src/app/kcf_scripts/configure_connection.sh"
   },
   "templates_dir": "/usr/src/app/ui/templates/",
-  "exec_script_on_reboot": false
+  "exec_script_on_reboot": true
 }
