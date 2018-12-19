@@ -75,6 +75,29 @@
                         </div>
                     </div>
 
+                    <div class="row wifi_static col-xs-12">
+                        <div class="row col-xs-12">
+                            <div class="col-xs-4"><p>Type</p></div>
+                            <div class="col-xs-8"><p>Wifi Static</p></div>
+                        </div>
+                        <div class="row col-xs-12">
+                            <div class="col-xs-4"><p>IP Address</p></div>
+                            <div class="col-xs-8"><p>{{ip_address}}</p></div>
+                        </div>
+                        <div class="row col-xs-12">
+                            <div class="col-xs-4"><p>Subnet Mask</p></div>
+                            <div class="col-xs-8"><p>{{netmask}}</p></div>
+                        </div>
+                        <div class="row col-xs-12">
+                            <div class="col-xs-4"><p>Gateway</p></div>
+                            <div class="col-xs-8"><p>{{gateway}}</p></div>
+                        </div>
+                        <div class="row col-xs-12">
+                            <div class="col-xs-4"><p>DNS</p></div>
+                            <div class="col-xs-8"><p>{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}</p></div>
+                        </div>
+                    </div>
+
                     <div class="row wifi_dhcp col-xs-12">
                         <div class="row col-xs-12">
                             <div class="col-xs-4"><p>Type</p></div>
@@ -157,13 +180,21 @@
 						$('.ethernet_static').show();
 						$('.ethernet_dhcp').hide();
 						$('.wifi_dhcp').hide();
+                        $('.wifi_static').hide();
 					} else if (val===1) { //ethernet dhcp 
 						$('.ethernet_static').hide();
 						$('.ethernet_dhcp').show();
 						$('.wifi_dhcp').hide();
-					} else if (val===2) { // wifi dhcp
+                        $('.wifi_static').hide();
+					} else if (val===2) { // wifi static 
 						$('.ethernet_static').hide();
 						$('.ethernet_dhcp').hide();
+						$('.wifi_static').show();
+						$('.wifi_dhcp').hide();
+					} else if (val===3) { // wifi dhcp 
+						$('.ethernet_static').hide();
+						$('.ethernet_dhcp').hide();
+						$('.wifi_static').hide();
 						$('.wifi_dhcp').show();
 					}
 				};
