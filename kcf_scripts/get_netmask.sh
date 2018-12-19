@@ -7,11 +7,11 @@ fi
 
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
-    ifconfig $1 | grep netmask | awk '{print $4}'
+    ifconfig $1 | grep Mask: | awk '{print $4}' | cut -d : -f 2
 elif [[ "$unamestr" == 'Darwin' ]]; then
     echo "255.255.255.0"
 fi
 
-#apparently this doens't work in the container, but does work in the hostOS, no idea why...
-#ifconfig "$1" | sed -rn '2s/ .*:(.*)$/\1/p'
+#fedora
+#ifconfig $1 | grep netmask | awk '{print $4}'
 
