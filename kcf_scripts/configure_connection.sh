@@ -5,12 +5,7 @@
 #TODO: add some usage examples here
 
 #See all the variables the user is setting
-#DEBUG=1
-
-#NOTE:
-#All commands are piped into $NETWORK_COMMAND_SINK
-#This script only generates the commands, it does not execute them.  
-#That is up to the caller to do as they want
+DEBUG=1
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -114,19 +109,20 @@ if [ "$METHOD" == "dhcp" ]; then
     COMMANDS+=("nmcli con del $INTERFACE_NAME")
     if [ "$INTERFACE_TYPE" == "ethernet" ]; then
         COMMANDS+=("nmcli con add type $INTERFACE_TYPE con-name $INTERFACE_NAME ifname $INTERFACE_NAME")
-    else 
+    else if [ "$INTERFACE_TYPE" == "wifi" ]; then
         COMMANDS+=("nmcli dev wifi connect '$SSID' password '$PSK' ifname $INTERFACE_NAME")
     fi
 
 elif [ "$METHOD" == "static" ]; then
-    if [ "$INTERFACE_TYPE" == "wifi" ]; then
-        echo "Static settings on wifi not supported."
-        exit 7
+
+    COMMANDS+=("nmcli con del $INTERFACE_NAME")
+
+    if [ "$INTERFACE_TYPE" == "ethernet" ]; then
+        COMMANDS+=("nmcli con add type $INTERFACE_TYPE con-name $INTERFACE_NAME ifname $INTERFACE_NAME")
+    else if [ "$INTERFACE_TYPE" == "wifi" ]; then
+        COMMANDS+=("nmcli con add type $INTERFACE_TYPE con-name $INTERFACE_NAME ifname $INTERFACE_NAME ssid '$SSID' ip4 $IP_ADDRESS/24 gw4 $GATEWAY")
     fi
 
-    #delete old interface of same name.  Add new one with static and append the dns settings.
-    COMMANDS+=("nmcli con del $INTERFACE_NAME")
-    COMMANDS+=("nmcli con add type $INTERFACE_TYPE con-name $INTERFACE_NAME ifname $INTERFACE_NAME ip4 $IP_ADDRESS/24 gw4 $GATEWAY")
     COMMANDS+=("nmcli con mod $INTERFACE_NAME ipv4.dns '$DNS_ENTRIES'")
 fi
 
