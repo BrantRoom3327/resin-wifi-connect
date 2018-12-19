@@ -1,8 +1,9 @@
-FROM resin/amd64-fedora:25-20171228
+FROM resin/amd64-fedora:25
 
-RUN dnf install -y dnsmasq wireless-tools vim file NetworkManager && systemctl mask NetworkManager.service && dnf clean all
-
-#dnsmasq wireless-tools vim file udhcpd network-manager
+RUN dnf install -y \
+	dnsmasq wireless-tools vim file udhcpd network-manager \
+	&& systemctl mask NetworkManager.service \
+	&& dnf clean all
 
 ENV INITSYSTEM on
 
