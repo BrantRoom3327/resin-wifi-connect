@@ -17,7 +17,7 @@ use iron::Set;
 use hbs::Template;
 use std::io::ErrorKind::InvalidData;
 use server::{collect_do_auth_options, collect_set_config_options, 
-    get_kcf_runtime_data, inject_ethernet_static_settings, exit_http_server, set_shutdown};
+    get_kcf_runtime_data, inject_ethernet_static_settings, inject_wifi_settings, exit_http_server, set_shutdown};
 use num::FromPrimitive;
 use serde_json::Value;
 use std::path::Path;
@@ -232,7 +232,7 @@ pub struct RuntimeData {
     //data sent from client, used for display
     pub proxy_settings: ProxySettings,
     pub ethernet_static_network_settings: NetworkSettings, //used to store ethernet static settings as needed for templating
-    pub wifi_network_settings: WifiSettings,
+    pub wifi_network_settings: WifiSettings,  //used to also store static settings as needed for templating
     pub shutting_down: bool,  //the system is shutting down and won't take more commands
 }
 
@@ -605,8 +605,6 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             gateway: valid_gateway,
             dns: valid_dns_entries,
         };
-
-        println!("Got those wifi settings {:?}\n", wifi_settings);
     }
 
     // setup ethernet adapter with new settings in config file.
@@ -639,14 +637,13 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     config_data.network_configuration_type = options.network_configuration_type;
 
     //
-    // inject the new static ethernet settings into runtime data only if we need it
+    // inject the new static ethernet or wifi settings into runtime data if chosen.
     //
     match network_configuration_type  {
         NetworkCfgType::Ethernet_Static => inject_ethernet_static_settings(req, ethernet_settings)?,
+        NetworkCfgType::Wifi_Static => inject_wifi_settings(req, wifi_settings)?,
         _ => (),
     };
-
-    println!("Ethernet stuff injected!\n");
 
     //
     // Update the sd collector xml file
@@ -1104,7 +1101,6 @@ pub fn get_netmask_for_adapter(config_data: &SmartDiagnosticsConfig, adapter_nam
 
     let mut stdout = String::from_utf8(output.stdout).unwrap();
     stdout = stdout.trim().to_string();
-    info!("get_netmask_for_adapter stdout -> {}\n", stdout);
 
     match Ipv4Addr::from_str(&stdout) {
         Ok(eth) => return Some(eth),
@@ -1168,7 +1164,7 @@ pub fn get_dns_entries(config_data: &SmartDiagnosticsConfig, adapter_name: &str)
                     return Some(vec)
                 }
             };
-            println!("Found an entry -> {}", valid_dns);
+            //println!("Found an entry -> {}", valid_dns);
             vec.push(valid_dns);
         }
     }

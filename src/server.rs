@@ -375,13 +375,25 @@ pub fn exit_http_server(req: &mut Request) -> IronResult<()> {
 }
 
 // inject ethernet settings into runtime data.
-pub fn inject_ethernet_static_settings(req: &mut Request, ethernet_settings: NetworkSettings) -> IronResult<()> {
+pub fn inject_ethernet_static_settings(req: &mut Request, settings: NetworkSettings) -> IronResult<()> {
     let wr = match req.get::<Write<RequestSharedState>>() {
         Ok(wr) => wr,
         Err(_e) => return Err(IronError::new(StringError("Could not get request shared state".to_string()), status::InternalServerError)),
     };
 
-    wr.as_ref().lock().unwrap().kcf.ethernet_static_network_settings = ethernet_settings;
+    wr.as_ref().lock().unwrap().kcf.ethernet_static_network_settings = settings;
+
+    Ok(())
+}
+
+// inject wifi settings into runtime data.
+pub fn inject_wifi_settings(req: &mut Request, settings: WifiSettings) -> IronResult<()> {
+    let wr = match req.get::<Write<RequestSharedState>>() {
+        Ok(wr) => wr,
+        Err(_e) => return Err(IronError::new(StringError("Could not get request shared state".to_string()), status::InternalServerError)),
+    };
+
+    wr.as_ref().lock().unwrap().kcf.wifi_network_settings = settings;
 
     Ok(())
 }
