@@ -601,13 +601,14 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
         }
 
         wifi_settings.settings = NetworkSettings {
-            adapter_name: config_data.network_interfaces.collector_ethernet.to_string(),
+            adapter_name: config_data.network_interfaces.collector_wifi.to_string(),
             dhcp_enabled: false,
             ip_address: valid_ip_address,
             netmask: valid_netmask,
             gateway: valid_gateway,
             dns: valid_dns_entries,
         };
+        println!("Wifi settings after static config {:?}", wifi_settings);
     }
 
     // setup ethernet adapter with new settings in config file.
@@ -914,13 +915,17 @@ fn configure_system_network_settings(
     if network_configuration_type == &NetworkCfgType::Ethernet_DHCP {
         let eth = write_ethernet_settings(ethernet_settings, false, Some(1))?;
         commands.push(format!("{} {}", config_data.scripts.configure_connection, eth));
+        
         let wifi = write_wifi_settings(wifi_settings, true, None)?; //disable wifi with true here
         commands.push(format!("{} {}", config_data.scripts.configure_connection, wifi));
+
     } else if network_configuration_type == &NetworkCfgType::Ethernet_Static {
         let eth = write_ethernet_settings(ethernet_settings, false, Some(1))?;
         commands.push(format!("{} {}", config_data.scripts.configure_connection, eth));
+
         let wifi = write_wifi_settings(wifi_settings, true, None)?; //disable wifi with true here
         commands.push(format!("{} {}", config_data.scripts.configure_connection, wifi));
+
     } else if network_configuration_type == &NetworkCfgType::Wifi_DHCP {
         //in the wifi primary case (this case) we still want a ethernet config
         //because network manager will auto create configurations for device that are plugged in.
@@ -928,13 +933,20 @@ fn configure_system_network_settings(
         //want it NOT to get an address or be routed.  Send true for disable_autoconnect
         let eth = write_ethernet_settings(ethernet_settings, true, None)?;
         commands.push(format!("{} {}", config_data.scripts.configure_connection, eth));
+
         let wifi = write_wifi_settings(wifi_settings, false, Some(1))?;
         commands.push(format!("{} {}", config_data.scripts.configure_connection, wifi));
+
      } else if network_configuration_type == &NetworkCfgType::Wifi_Static {
+
+         //ethernet is connected but we want to be disabled.  So disable_autoconnect is true for
+         //that connection.
         let eth = write_ethernet_settings(ethernet_settings, true, None)?;
         commands.push(format!("{} {}", config_data.scripts.configure_connection, eth));
+
         let wifi = write_wifi_settings(wifi_settings, false, Some(1))?;
         commands.push(format!("{} {}", config_data.scripts.configure_connection, wifi));
+
     } else {
         return Err(Error::new(ErrorKind::Other, "invalid network configuration"));
     }
