@@ -1102,14 +1102,21 @@ pub fn get_netmask_for_adapter(config_data: &SmartDiagnosticsConfig, adapter_nam
     let mut stdout = String::from_utf8(output.stdout).unwrap();
     stdout = stdout.trim().to_string();
 
-    println!("Netmask output from script {:?} for adapter {}\n", stdout, adapter_name);
+    //return from script is a value like "24" or "16" the number of bits in the mask, or nothing at
+    //all.
 
-    match Ipv4Addr::from_str(&stdout) {
-        Ok(eth) => return Some(eth),
-        Err(e) => {
-            error!("get_netmask_for_adapter: Error {:?} adapter {}", e, adapter_name);
-            return Some(Ipv4Addr::from_str("0.0.0.0").unwrap());
-        }
+    if "".to_string() == stdout {
+       // error!("get_netmask_for_adapter: Error {:?} adapter {}", e, adapter_name);
+        Some(Ipv4Addr::from_str("0.0.0.0").unwrap())
+    } else {
+        // convert to int and fill that many bits of a 32bit value
+        let maskBits: u32 = stdout.parse().unwrap();
+        let shiftBits: u32 = 32 - maskBits;  // bits to shift up after convert.
+        let maskVal: u32 = (2_u32.pow(maskBits) - 1) << shiftBits;
+
+        let maskAddr: Ipv4Addr = Ipv4Addr::from(maskVal);
+        info!("netmask: {}", maskAddr);
+        Some(maskAddr)
     }
 }
 

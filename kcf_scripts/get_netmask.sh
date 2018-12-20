@@ -5,14 +5,11 @@ if [ $# -ne 1 ]; then
     exit
 fi
 
+#returns the number of bits in the mask, so 24 means "255.255.255.0"
+
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
-    /sbin/ifconfig $1 | grep Mask: | awk '{print $4}'
+    nmcli device show $1 | grep IP4.ADDRESS | awk '{print $2}' | cut -d '/' -f 2
 elif [[ "$unamestr" == 'Darwin' ]]; then
-    echo "255.255.255.0"
+    echo "24"
 fi
-
-#fedora
-#ifconfig $1 | grep netmask | awk '{print $4}'
-    #/sbin/ifconfig $1 | grep Mask: | awk '{print $4}' | cut -d ':' -f 2
-
