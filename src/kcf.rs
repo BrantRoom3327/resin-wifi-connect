@@ -400,7 +400,6 @@ fn validate_http_cookie(req: &mut Request) -> Result<(), Error> {
 
 pub fn http_route_restart(req: &mut Request) -> IronResult<Response> {
 
-    println!("Http route restart\n");
     match validate_http_cookie(req) {
         Ok(()) => (),
         Err(e) => {

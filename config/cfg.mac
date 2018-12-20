@@ -5,8 +5,8 @@
   "cookie_key": "655A6F61795598A5B55C71D6C2BB17983AA38F6C8418DBCAB9572660E6567DA6",
   "network_interfaces": {
     "collector_ethernet": "en0",
-    "collector_wifi": "en0",
-    "static_streaming_ethernet": "en0",
+    "collector_wifi": "en4",
+    "static_streaming_ethernet": "en1",
     "hotspot": "en0"
   },
   "output_files": {
