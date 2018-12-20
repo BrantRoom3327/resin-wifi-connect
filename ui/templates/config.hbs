@@ -53,30 +53,30 @@
 					<div class="input-group ethernet_static col-xs-10" class="col-md-3">
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
-							<div class="col-xs-4"><label for="ip_address">IP Address</label></div>
+							<div class="col-xs-4"><label for="ethernet_ip_address">IP Address</label></div>
 							<div class="col-xs-7">
-                                <input type="text" class="form-control" name="ip_address" value="{{ip_address}}">
+                                <input type="text" class="form-control" name="ethernet_ip_address" value="{{ip_address}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
-							<div class="col-xs-4"><label for="subnet_mask">Subnet Mask</label></div>
+							<div class="col-xs-4"><label for="ethernet_subnet_mask">Subnet Mask</label></div>
 							<div class="col-xs-7">
-								<input type="text" class="form-control" name="subnet_mask" value="{{netmask}}">
+								<input type="text" class="form-control" name="ethernet_subnet_mask" value="{{netmask}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
-							<div class="col-xs-4"><label for="gateway">Gateway</label></div>
+							<div class="col-xs-4"><label for="ethernet_gateway">Gateway</label></div>
 							<div class="col-xs-7">
-                                <input type="text" class="form-control" name="gateway" value="{{gateway}}">
+                                <input type="text" class="form-control" name="ethernet_gateway" value="{{gateway}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
-							<div class="col-xs-4"><label for="dns">DNS</label></div>
+							<div class="col-xs-4"><label for="ethernet_dns">DNS</label></div>
 							<div class="col-xs-7">
-								<input type="text" class="form-control" name="dns" value="{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
+								<input type="text" class="form-control" name="ethernet_dns" value="{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
 							</div>
 						</div>
 						<div class="row-spacer">
@@ -87,6 +87,15 @@
 						</div>
 					</div>
 					
+                    <div class="input-group ethernet_dhcp col-xs-10" class="col-md-3">
+						<div class="row-spacer">
+							<p>&nbsp;</p>
+						</div>
+						<div class="row-spacer">
+							<p>&nbsp;</p>
+						</div>
+					</div>
+
 					<div class="input-group wifi_dhcp col-xs-10" class="col-md-3">
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
@@ -127,30 +136,30 @@
 						</div>
                         <div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
-							<div class="col-xs-4"><label for="ip_address">IP Address</label></div>
+							<div class="col-xs-4"><label for="wifi_ip_address">IP Address</label></div>
 							<div class="col-xs-7">
-                                <input type="text" class="form-control" name="ip_address" value="{{ip_address}}">
+                                <input type="text" class="form-control" name="wifi_ip_address" value="{{ip_address}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
-							<div class="col-xs-4"><label for="subnet_mask">Subnet Mask</label></div>
+							<div class="col-xs-4"><label for="wifi_subnet_mask">Subnet Mask</label></div>
 							<div class="col-xs-7">
-								<input type="text" class="form-control" name="subnet_mask" value="{{netmask}}">
+								<input type="text" class="form-control" name="wifi_subnet_mask" value="{{netmask}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
-							<div class="col-xs-4"><label for="gateway">Gateway</label></div>
+							<div class="col-xs-4"><label for="wifi_gateway">Gateway</label></div>
 							<div class="col-xs-7">
-                                <input type="text" class="form-control" name="gateway" value="{{gateway}}">
+                                <input type="text" class="form-control" name="wifi_gateway" value="{{gateway}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
-							<div class="col-xs-4"><label for="dns">DNS</label></div>
+							<div class="col-xs-4"><label for="wifi_dns">DNS</label></div>
 							<div class="col-xs-7">
-								<input type="text" class="form-control" name="dns" value="{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
+								<input type="text" class="form-control" name="wifi_dns" value="{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
 							</div>
 						</div>
 						<div class="row-spacer">
@@ -319,18 +328,22 @@
 				function showHideNetworkDiv(val) {
 					if (val===0) { // 0 means static ethernet
 						$('.ethernet_static').show();
+						$('.ethernet_dhcp').hide();
 						$('.wifi_dhcp').hide();
 						$('.wifi_static').hide();
 					} else if (val===1) { //1 ethernet dhcp 
 						$('.ethernet_static').hide();
+						$('.ethernet_dhcp').show();
 						$('.wifi_dhcp').hide();
 						$('.wifi_static').hide();
 					} else if (val===2) { // 2 wifi static 
 						$('.ethernet_static').hide();
+						$('.ethernet_dhcp').hide();
 						$('.wifi_dhcp').hide();
 						$('.wifi_static').show();
 					} else if (val===3) { // 3 wifi dhcp 
 						$('.ethernet_static').hide();
+						$('.ethernet_dhcp').hide();
 						$('.wifi_dhcp').show();
 						$('.wifi_static').hide();
 					}
@@ -347,7 +360,7 @@
 				function showHideProxyDiv(val) {
 					if(val === 1) {
 						$('.show_proxy_settings').show();
-                                        } else {
+                    } else {
 						$('.show_proxy_settings').hide();
 					}
 				}

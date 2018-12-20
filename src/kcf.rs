@@ -204,13 +204,17 @@ pub struct SetConfigOptionsFromPost {
     pub cloud_storage_enabled: bool,
     pub destination_address: String,
     pub network_configuration_type: u8,
+    pub proxy: ProxySettings,
     pub wifi_ssid: String,
     pub wifi_passphrase: String,
-    pub ip_address: String,
-    pub subnet_mask: String,
-    pub gateway: String,
-    pub dns: String,
-    pub proxy: ProxySettings,
+    pub wifi_ip_address: String,
+    pub wifi_subnet_mask: String,
+    pub wifi_gateway: String,
+    pub wifi_dns: String,
+    pub ethernet_ip_address: String,
+    pub ethernet_subnet_mask: String,
+    pub ethernet_gateway: String,
+    pub ethernet_dns: String,
 }
 
 #[derive(Deserialize, PartialEq, PartialOrd, Debug, Clone)]
@@ -439,6 +443,7 @@ pub fn http_route_restart(req: &mut Request) -> IronResult<Response> {
 pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
 
     let options = collect_set_config_options(req)?;
+    //println!("Options {:?}", options);
 
     // make sure the network configuration type gets validated here and type converted
     let network_configuration_type = match get_network_cfg_type(options.network_configuration_type) {
@@ -472,7 +477,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     }
     else if network_configuration_type == NetworkCfgType::Ethernet_Static {
 
-        let valid_ip_address = match Ipv4Addr::from_str(&options.ip_address) {
+        let valid_ip_address = match Ipv4Addr::from_str(&options.ethernet_ip_address) {
             Ok(eth) => eth,
             Err(_) => {
                 return Err(IronError::new(
@@ -482,7 +487,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             }
         };
 
-        let valid_netmask = match Ipv4Addr::from_str(&options.subnet_mask) {
+        let valid_netmask = match Ipv4Addr::from_str(&options.ethernet_subnet_mask) {
             Ok(nm) => nm,
             Err(_) => {
                 return Err(IronError::new(
@@ -492,7 +497,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             }
         };
 
-        let valid_gateway = match Ipv4Addr::from_str(&options.gateway) {
+        let valid_gateway = match Ipv4Addr::from_str(&options.ethernet_gateway) {
             Ok(gw) => gw,
             Err(_) => {
                 return Err(IronError::new(
@@ -502,7 +507,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             }
         };
 
-        let vec_dns: Vec<&str> = options.dns.split(',').collect();
+        let vec_dns: Vec<&str> = options.ethernet_dns.split(',').collect();
         let mut valid_dns_entries = Vec::new();
         for v in vec_dns {
             let trimmed_ip = v.trim();
@@ -538,10 +543,12 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             gateway: valid_gateway,
             dns: valid_dns_entries,
         };
+
+        //println!("Ethernet static settings {:?}", ethernet_settings);
     }
     else if network_configuration_type == NetworkCfgType::Wifi_Static {
 
-        let valid_ip_address = match Ipv4Addr::from_str(&options.ip_address) {
+        let valid_ip_address = match Ipv4Addr::from_str(&options.wifi_ip_address) {
             Ok(eth) => eth,
             Err(_) => {
                 return Err(IronError::new(
@@ -551,7 +558,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             }
         };
 
-        let valid_netmask = match Ipv4Addr::from_str(&options.subnet_mask) {
+        let valid_netmask = match Ipv4Addr::from_str(&options.wifi_subnet_mask) {
             Ok(nm) => nm,
             Err(_) => {
                 return Err(IronError::new(
@@ -561,7 +568,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             }
         };
 
-        let valid_gateway = match Ipv4Addr::from_str(&options.gateway) {
+        let valid_gateway = match Ipv4Addr::from_str(&options.wifi_gateway) {
             Ok(gw) => gw,
             Err(_) => {
                 return Err(IronError::new(
@@ -571,7 +578,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             }
         };
 
-        let vec_dns: Vec<&str> = options.dns.split(',').collect();
+        let vec_dns: Vec<&str> = options.wifi_dns.split(',').collect();
         let mut valid_dns_entries = Vec::new();
         for v in vec_dns {
             let trimmed_ip = v.trim();
@@ -607,7 +614,7 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             gateway: valid_gateway,
             dns: valid_dns_entries,
         };
-        println!("Wifi settings after static config {:?}", wifi_settings);
+        //println!("Wifi settings after static config {:?}", wifi_settings);
     }
 
     // setup ethernet adapter with new settings in config file.
@@ -643,8 +650,8 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     // inject the new static ethernet or wifi settings into runtime data if chosen.
     //
     match network_configuration_type  {
-        NetworkCfgType::Ethernet_Static => inject_ethernet_static_settings(req, ethernet_settings)?,
-        NetworkCfgType::Wifi_Static => inject_wifi_settings(req, wifi_settings)?,
+        NetworkCfgType::Ethernet_Static => inject_ethernet_static_settings(req, ethernet_settings, options.network_configuration_type)?,
+        NetworkCfgType::Wifi_Static => inject_wifi_settings(req, wifi_settings, options.network_configuration_type)?,
         _ => (),
     };
 
@@ -938,8 +945,8 @@ fn configure_system_network_settings(
 
      } else if network_configuration_type == &NetworkCfgType::Wifi_Static {
 
-         //ethernet is connected but we want to be disabled.  So disable_autoconnect is true for
-         //that connection.
+        //ethernet is connected but we want to be disabled.  
+        //So disable_autoconnect is true for that connection.
         let eth = write_ethernet_settings(ethernet_settings, true, None)?;
         commands.push(format!("{} {}", config_data.scripts.configure_connection, eth));
 

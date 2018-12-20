@@ -331,22 +331,31 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
     // settings
     let wifi_ssid = get_param!(params, "wifi_ssid", String);
     let wifi_passphrase = get_param!(params, "wifi_passphrase", String);
-    let ip_address = get_param!(params, "ip_address", String);
-    let subnet_mask = get_param!(params, "subnet_mask", String);
-    let gateway = get_param!(params, "gateway", String);
-    let dns = get_param!(params, "dns", String);
+    let wifi_ip_address = get_param!(params, "wifi_ip_address", String);
+    let wifi_subnet_mask = get_param!(params, "wifi_subnet_mask", String);
+    let wifi_gateway = get_param!(params, "wifi_gateway", String);
+    let wifi_dns = get_param!(params, "wifi_dns", String);
+
+    let ethernet_ip_address = get_param!(params, "ethernet_ip_address", String);
+    let ethernet_subnet_mask = get_param!(params, "ethernet_subnet_mask", String);
+    let ethernet_gateway = get_param!(params, "ethernet_gateway", String);
+    let ethernet_dns = get_param!(params, "ethernet_dns", String);
 
     Ok(SetConfigOptionsFromPost {
         cloud_storage_enabled,
         destination_address,
-        proxy,
         network_configuration_type,
+        proxy,
         wifi_ssid,
         wifi_passphrase,
-        ip_address,
-        subnet_mask,
-        gateway,
-        dns,
+        wifi_ip_address,
+        wifi_subnet_mask,
+        wifi_gateway,
+        wifi_dns,
+        ethernet_ip_address,
+        ethernet_subnet_mask,
+        ethernet_gateway,
+        ethernet_dns,
     })
 }
 
@@ -375,25 +384,27 @@ pub fn exit_http_server(req: &mut Request) -> IronResult<()> {
 }
 
 // inject ethernet settings into runtime data.
-pub fn inject_ethernet_static_settings(req: &mut Request, settings: NetworkSettings) -> IronResult<()> {
+pub fn inject_ethernet_static_settings(req: &mut Request, settings: NetworkSettings, network_configuration_type: u8) -> IronResult<()> {
     let wr = match req.get::<Write<RequestSharedState>>() {
         Ok(wr) => wr,
         Err(_e) => return Err(IronError::new(StringError("Could not get request shared state".to_string()), status::InternalServerError)),
     };
 
     wr.as_ref().lock().unwrap().kcf.ethernet_static_network_settings = settings;
+    wr.as_ref().lock().unwrap().kcf.config_data.network_configuration_type = network_configuration_type;
 
     Ok(())
 }
 
 // inject wifi settings into runtime data.
-pub fn inject_wifi_settings(req: &mut Request, settings: WifiSettings) -> IronResult<()> {
+pub fn inject_wifi_settings(req: &mut Request, settings: WifiSettings, network_configuration_type: u8) -> IronResult<()> {
     let wr = match req.get::<Write<RequestSharedState>>() {
         Ok(wr) => wr,
         Err(_e) => return Err(IronError::new(StringError("Could not get request shared state".to_string()), status::InternalServerError)),
     };
 
     wr.as_ref().lock().unwrap().kcf.wifi_network_settings = settings;
+    wr.as_ref().lock().unwrap().kcf.config_data.network_configuration_type = network_configuration_type;
 
     Ok(())
 }
