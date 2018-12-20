@@ -400,6 +400,7 @@ fn validate_http_cookie(req: &mut Request) -> Result<(), Error> {
 
 pub fn http_route_restart(req: &mut Request) -> IronResult<Response> {
 
+    println!("Http route restart\n");
     match validate_http_cookie(req) {
         Ok(()) => (),
         Err(e) => {
@@ -424,6 +425,8 @@ pub fn http_route_restart(req: &mut Request) -> IronResult<Response> {
             let serr = String::from_utf8(output.stderr).expect("Not UTF-8");
             println!("stdout: {}", sout);
             println!("stderr: {}", serr);
+        } else {
+            println!("skipping network configuration\n");
         }
 
         exit_http_server(req)?;
@@ -1148,9 +1151,6 @@ pub fn get_dns_entries(config_data: &SmartDiagnosticsConfig, adapter_name: &str)
         println!("We got an empty string for dns!\n");
     }
     else {
-        //real dns entries or some text data anyway.
-        println!("We got past split collect with {} entries it is {}\n", str_vec.len(), str_vec[0]);
-        // we have dns entries
         for s in str_vec {
             let valid_dns = match Ipv4Addr::from_str(&s) {
                 Ok(eth) => eth,
@@ -1161,7 +1161,6 @@ pub fn get_dns_entries(config_data: &SmartDiagnosticsConfig, adapter_name: &str)
                     return Some(vec)
                 }
             };
-            //println!("Found an entry -> {}", valid_dns);
             vec.push(valid_dns);
         }
     }
