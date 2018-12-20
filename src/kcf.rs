@@ -1102,7 +1102,7 @@ pub fn get_netmask_for_adapter(config_data: &SmartDiagnosticsConfig, adapter_nam
     let mut stdout = String::from_utf8(output.stdout).unwrap();
     stdout = stdout.trim().to_string();
 
-    println!("Netmask output from script {:?}\n", stdout);
+    println!("Netmask output from script {:?} for adapter {}\n", stdout, adapter_name);
 
     match Ipv4Addr::from_str(&stdout) {
         Ok(eth) => return Some(eth),
@@ -1140,7 +1140,6 @@ pub fn get_dns_entries(config_data: &SmartDiagnosticsConfig, adapter_name: &str)
 
     let mut stdout = String::from_utf8(output.stdout).unwrap();
     stdout = stdout.trim().to_string();
-    info!("script gave dns: {} adapter name is {} script is {}", stdout, adapter_name, config_data.scripts.get_dns);
 
     let mut vec = Vec::new();
 
