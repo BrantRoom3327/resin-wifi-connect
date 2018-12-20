@@ -1102,6 +1102,8 @@ pub fn get_netmask_for_adapter(config_data: &SmartDiagnosticsConfig, adapter_nam
     let mut stdout = String::from_utf8(output.stdout).unwrap();
     stdout = stdout.trim().to_string();
 
+    println!("Netmask output from script {:?}\n", stdout);
+
     match Ipv4Addr::from_str(&stdout) {
         Ok(eth) => return Some(eth),
         Err(e) => {
