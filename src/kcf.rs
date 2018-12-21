@@ -757,7 +757,7 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
     merge(&mut cfg_json, json!({"wifi_subnet_mask": wifi_settings.netmask}));
     merge(&mut cfg_json, json!({"wifi_dns": wifi_settings.dns}));
 
-   // println!("Cfg json {:?}\n", cfg_json);
+    println!("Cfg json {:?}\n", cfg_json);
 
     //overwritting the value in the config here (key reuse)
     merge(&mut cfg_json, json!({"data_destination_url": current_prometheus_url}));
