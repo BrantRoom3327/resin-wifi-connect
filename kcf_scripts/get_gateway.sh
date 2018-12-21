@@ -12,4 +12,3 @@ elif [[ "$unamestr" == 'Darwin' ]]; then
     echo "192.168.1.1"
 fi
 
-#for fedora

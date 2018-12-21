@@ -543,8 +543,6 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             gateway: valid_gateway,
             dns: valid_dns_entries,
         };
-
-        //println!("Ethernet static settings {:?}", ethernet_settings);
     }
     else if network_configuration_type == NetworkCfgType::Wifi_Static {
 
@@ -614,7 +612,6 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             gateway: valid_gateway,
             dns: valid_dns_entries,
         };
-        //println!("Wifi settings after static config {:?}", wifi_settings);
     }
 
     // setup ethernet adapter with new settings in config file.
@@ -757,7 +754,7 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
     merge(&mut cfg_json, json!({"wifi_subnet_mask": wifi_settings.netmask}));
     merge(&mut cfg_json, json!({"wifi_dns": wifi_settings.dns}));
 
-    println!("Cfg json {:?}\n", cfg_json);
+    //println!("Cfg json {:?}\n", cfg_json);
 
     //overwritting the value in the config here (key reuse)
     merge(&mut cfg_json, json!({"data_destination_url": current_prometheus_url}));

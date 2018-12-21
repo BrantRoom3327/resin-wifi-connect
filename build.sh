@@ -7,11 +7,11 @@ do
 key="$1"
 
 case $key in
-    -pi|--pi|-p)
+    -pi|--pi)
     RASPBERRY_PI=1
     shift # past arg 
     ;;
-    -intel|--intel|-i)
+    -intel|--intel|-p)
     INTEL_NUC=1
     shift # past arg 
     ;;
