@@ -55,28 +55,28 @@
                             <div class="col-xs-1">&nbsp;</div>
 							<div class="col-xs-4"><label for="ethernet_ip_address">IP Address</label></div>
 							<div class="col-xs-7">
-                                <input type="text" class="form-control" name="ethernet_ip_address" value="{{ip_address}}">
+                                <input type="text" class="form-control" name="ethernet_ip_address" value="{{ethernet_ip_address}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
 							<div class="col-xs-4"><label for="ethernet_subnet_mask">Subnet Mask</label></div>
 							<div class="col-xs-7">
-								<input type="text" class="form-control" name="ethernet_subnet_mask" value="{{netmask}}">
+								<input type="text" class="form-control" name="ethernet_subnet_mask" value="{{ethernet_netmask}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
 							<div class="col-xs-4"><label for="ethernet_gateway">Gateway</label></div>
 							<div class="col-xs-7">
-                                <input type="text" class="form-control" name="ethernet_gateway" value="{{gateway}}">
+                                <input type="text" class="form-control" name="ethernet_gateway" value="{{ethernet_gateway}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
 							<div class="col-xs-4"><label for="ethernet_dns">DNS</label></div>
 							<div class="col-xs-7">
-								<input type="text" class="form-control" name="ethernet_dns" value="{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
+								<input type="text" class="form-control" name="ethernet_dns" value="{{#each ethernet_dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
 							</div>
 						</div>
 						<div class="row-spacer">
@@ -129,7 +129,7 @@
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
-							<div class="col-xs-4"><label for="wifi_passphrase">Wifi Password</label></div>
+							<div class="col-xs-4"><label for="wifi_passphrase">Wifi Passphrase</label></div>
 							<div class="col-xs-7">
 								<input type="password" class="form-control" name="wifi_passphrase" value="">
 							</div>
@@ -138,28 +138,28 @@
                             <div class="col-xs-1">&nbsp;</div>
 							<div class="col-xs-4"><label for="wifi_ip_address">IP Address</label></div>
 							<div class="col-xs-7">
-                                <input type="text" class="form-control" name="wifi_ip_address" value="{{ip_address}}">
+                                <input type="text" class="form-control" name="wifi_ip_address" value="{{wifi_ip_address}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
 							<div class="col-xs-4"><label for="wifi_subnet_mask">Subnet Mask</label></div>
 							<div class="col-xs-7">
-								<input type="text" class="form-control" name="wifi_subnet_mask" value="{{netmask}}">
+								<input type="text" class="form-control" name="wifi_subnet_mask" value="{{wifi_subnet_mask}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
 							<div class="col-xs-4"><label for="wifi_gateway">Gateway</label></div>
 							<div class="col-xs-7">
-                                <input type="text" class="form-control" name="wifi_gateway" value="{{gateway}}">
+                                <input type="text" class="form-control" name="wifi_gateway" value="{{wifi_gateway}}">
 							</div>
 						</div>
 						<div class="row col-xs-12">
                             <div class="col-xs-1">&nbsp;</div>
 							<div class="col-xs-4"><label for="wifi_dns">DNS</label></div>
 							<div class="col-xs-7">
-								<input type="text" class="form-control" name="wifi_dns" value="{{#each dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
+								<input type="text" class="form-control" name="wifi_dns" value="{{#each wifi_dns}}{{#if @last}}{{this}}{{else}}{{this}}, {{/if}}{{/each}}">
 							</div>
 						</div>
 						<div class="row-spacer">

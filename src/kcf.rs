@@ -701,7 +701,7 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
     }
 
     let kcf = get_kcf_runtime_data(req).expect("Couldn't get request state at runtime!");
-    let net_settings = match get_network_settings(&kcf.config_data, &kcf.config_data.network_interfaces.collector_ethernet) {
+    let ethernet_settings = match get_network_settings(&kcf.config_data, &kcf.config_data.network_interfaces.collector_ethernet) {
         Some(settings) => settings,
         None => {
             return Ok(Response::with((
@@ -710,6 +710,18 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
             )))
         },
     };
+
+    let wifi_settings = match get_network_settings(&kcf.config_data, &kcf.config_data.network_interfaces.collector_wifi) {
+        Some(settings) => settings,
+        None => {
+            return Ok(Response::with((
+                status::Unauthorized,
+                "Failed to acquire network settings from ethernet adapter.",
+            )))
+        },
+    };
+
+    println!("wifi settings {:?}\n", wifi_settings);
 
     //load the collector_settings_xml file and get the current value of the PrometheusURL
     let current_prometheus_url = match get_prometheus_url(&kcf.config_data.output_files.collector_xml_file) {
@@ -734,7 +746,18 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
     //inject the live network settings into the configuration we have stored and use
     //the merged output for the template render.
     let mut cfg_json = json!(kcf.config_data);
-    merge(&mut cfg_json, json!(net_settings));
+
+    merge(&mut cfg_json, json!({"ethernet_ip_address": ethernet_settings.ip_address}));
+    merge(&mut cfg_json, json!({"ethernet_gateway": ethernet_settings.gateway}));
+    merge(&mut cfg_json, json!({"ethernet_netmask": ethernet_settings.netmask}));
+    merge(&mut cfg_json, json!({"ethernet_dns": ethernet_settings.dns}));
+
+    merge(&mut cfg_json, json!({"wifi_ip_address": wifi_settings.ip_address}));
+    merge(&mut cfg_json, json!({"wifi_gateway": wifi_settings.gateway}));
+    merge(&mut cfg_json, json!({"wifi_subnet_mask": wifi_settings.netmask}));
+    merge(&mut cfg_json, json!({"wifi_dns": wifi_settings.dns}));
+
+   // println!("Cfg json {:?}\n", cfg_json);
 
     //overwritting the value in the config here (key reuse)
     merge(&mut cfg_json, json!({"data_destination_url": current_prometheus_url}));
@@ -771,7 +794,7 @@ pub fn http_route_do_auth(req: &mut Request) -> IronResult<Response> {
     //success auth at this point
     let cookie_str = create_cookie(kcf.config_data.cookie_key.as_bytes());
     resp.headers.append_raw("Set-Cookie", cookie_str.into_bytes());
-    //println!("server response:\n{:?}", resp);
+
     Ok(resp)
 }
 
