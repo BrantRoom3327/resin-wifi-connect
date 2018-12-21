@@ -7,7 +7,7 @@ fi
 
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
-    nmcli con show $1 | grep IP4.DNS | awk '{print $2}'
+    nmcli device show $1 | grep IP4.DNS | awk '{print $2}'
 elif [[ "$unamestr" == 'Darwin' ]]; then
     echo "8.8.8.8"
 fi
