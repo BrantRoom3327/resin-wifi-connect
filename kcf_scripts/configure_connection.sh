@@ -5,7 +5,7 @@
 #TODO: add some usage examples here
 
 #See all the variables the user is setting
-DEBUG=1
+#DEBUG=1
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -113,7 +113,7 @@ if [ "$METHOD" == "dhcp" ]; then
         COMMANDS+=("nmcli dev wifi connect '$SSID' password '$PSK' ifname $INTERFACE_NAME")
     fi
 
-elif [ "$METHOD" == "static" ]; then
+else if [ "$METHOD" == "static" ]; then
 
     COMMANDS+=("nmcli con del $INTERFACE_NAME")
 
