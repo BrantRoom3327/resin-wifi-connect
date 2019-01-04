@@ -1,4 +1,4 @@
-FROM balenalib/amd64-ubuntu
+FROM balenalib/amd64-ubuntu-latest-20181207
 
 ENV INITSYSTEM on
 

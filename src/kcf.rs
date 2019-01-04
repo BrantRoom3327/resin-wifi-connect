@@ -718,7 +718,7 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
         },
     };
 
-    println!("wifi settings {:?}\n", wifi_settings);
+    //println!("wifi settings {:?}\n", wifi_settings);
 
     //load the collector_settings_xml file and get the current value of the PrometheusURL
     let current_prometheus_url = match get_prometheus_url(&kcf.config_data.output_files.collector_xml_file) {
@@ -753,8 +753,6 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
     merge(&mut cfg_json, json!({"wifi_gateway": wifi_settings.gateway}));
     merge(&mut cfg_json, json!({"wifi_subnet_mask": wifi_settings.netmask}));
     merge(&mut cfg_json, json!({"wifi_dns": wifi_settings.dns}));
-
-    //println!("Cfg json {:?}\n", cfg_json);
 
     //overwritting the value in the config here (key reuse)
     merge(&mut cfg_json, json!({"data_destination_url": current_prometheus_url}));
