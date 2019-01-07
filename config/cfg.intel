@@ -5,7 +5,7 @@
   "cookie_key": "655A6F61795598A5B55C71D6C2BB17983AA38F6C8418DBCAB9572660E6567DA6",
   "network_interfaces": {
     "collector_ethernet": "enp1s0",
-    "collector_wifi": "wlp0s21f0u4",
+    "collector_wifi": "resin-wifi-01",
     "static_streaming_ethernet": "enp2s0",
     "hotspot": "wlp4s0"
   },
