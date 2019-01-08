@@ -8,7 +8,7 @@
     "collector_wifi": "wlp0s21f0u4",
     "static_streaming_ethernet": "enp2s0",
     "hotspot": "wlp4s0",
-    "wifi_alternate_adapter_names": [ "wlp0s21f0u3, "wlp0s21f0u2", "wlp0s21f0u1" ]
+    "wifi_alternate_adapter_names": [ "wlp0s21f0u3", "wlp0s21f0u2", "wlp0s21f0u1" ]
   },
   "output_files": {
     "configure_networking": "/data/configure-networking.sh",
