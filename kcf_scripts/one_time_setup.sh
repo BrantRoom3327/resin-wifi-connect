@@ -16,9 +16,6 @@ nmcli con add con-name $ETH1 ifname $ETH1 type ethernet ip4 192.168.151.100/24 g
 #nmcli con del "Wired connection 1"
 #nmcli con del "Wired connection 2"
 
-#try this next
-#nmcli con del resin-wifi-01
-
 #TODO: This doesn't really appear to have an effect from what i can tell.
 nmcli con mod "Wired connection 1" ipv4.never-default true
 

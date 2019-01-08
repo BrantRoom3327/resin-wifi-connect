@@ -20,7 +20,8 @@
     "get_gateway": "/usr/src/app/kcf_scripts/get_gateway.sh",
     "reboot": "/usr/src/app/kcf_scripts/reboot.sh",
     "networking_stub": "/usr/src/app/kcf_scripts/networking-stub.sh",
-    "configure_connection": "/usr/src/app/kcf_scripts/configure_connection.sh"
+    "configure_connection": "/usr/src/app/kcf_scripts/configure_connection.sh",
+    "find_device": "/usr/src/app/kcf_scripts/find_device.sh"
   },
   "templates_dir": "/usr/src/app/ui/templates/",
   "exec_script_on_reboot": false

@@ -71,7 +71,7 @@ fn merge(a: &mut Value, b: Value) {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NetworkSettings {
-    pub adapter_name: String,
+    pub adapter_name: String,  // adapter_name is a vector to handle possible names of interfaces for this name, they can vary based on how its plugged in
     pub dhcp_enabled: bool,
     pub ip_address: Ipv4Addr,
     pub netmask: Ipv4Addr,
@@ -108,6 +108,7 @@ pub struct WifiSettings {
     pub ssid: String,
     pub psk: String,
     pub settings: NetworkSettings,
+    pub wifi_alternate_adapter_names: Vec<String>,  // alternate adapter names as needed based on system handing us names like wlp4s0, wlp2s2, etc
 }
 
 impl WifiSettings {
@@ -116,13 +117,15 @@ impl WifiSettings {
             ssid: String::new(),
             psk: String::new(),
             settings: NetworkSettings::new(adapter_name),
+            wifi_alternate_adapter_names: Vec::new()
         }
     }
-    pub fn init(adapter_name: String, ssid: String, psk: String) -> WifiSettings {
+    pub fn init(adapter_name: String, ssid: String, psk: String, alternates: Vec<String>) -> WifiSettings {
         WifiSettings {
             ssid,
             psk,
             settings: NetworkSettings::new(adapter_name),
+            wifi_alternate_adapter_names: alternates,
         }
     }
 }
@@ -133,6 +136,7 @@ pub struct NetworkInterfaces {
     pub collector_wifi: String,     //wifi for upstream to cloud
     pub static_streaming_ethernet: String, //unchanging static addressed interface for streaming
     pub hotspot: String,  //interface the hotspot runs on
+    pub wifi_alternate_adapter_names: Vec<String>,  //alternate acceptable names for the wifi streaming interface, it can vary based on what USB port is plugged in
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -144,6 +148,7 @@ pub struct ExternalScripts {
     pub reboot: String, //script that will reboot the device when run.  Used for resin device reboot right now
     pub networking_stub: String, // base script that we inject other script calls into for resin.  Just some simple /bin/bash and an export right now.
     pub configure_connection: String, // script we send commands to configure each connection
+    pub find_devices: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -465,7 +470,12 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             config_data.network_interfaces.static_streaming_ethernet.clone());
 
     let mut wifi_settings = WifiSettings::init(config_data.network_interfaces.collector_wifi.clone(),
-        options.wifi_ssid, options.wifi_passphrase);
+        options.wifi_ssid, options.wifi_passphrase, config_data.network_interfaces.wifi_alternate_adapter_names.clone());
+
+    // so we wanna make sure the wifi_settings.adapter_name is correct or one of the alternates is
+    // valid and if so which.  Then we can move forward as that for the adapter name.
+    //
+    // Will need to do the same when getting settings too
 
     //ethernet is either dhcp or static
     let mut ethernet_settings = NetworkSettings::new(config_data.network_interfaces.collector_ethernet.clone());
@@ -708,12 +718,37 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
         },
     };
 
-    let wifi_settings = match get_network_settings(&kcf.config_data, &kcf.config_data.network_interfaces.collector_wifi) {
+    //create a list of collector_wifi adapters and the alternates from the config data for a single
+    //list to search
+    let mut wifi_adapters: Vec<&str> = Vec::new();
+    wifi_adapters.push(&kcf.config_data.network_interfaces.collector_wifi);
+    for i in &kcf.config_data.network_interfaces.wifi_alternate_adapter_names {
+        wifi_adapters.push(&*i);
+    };
+
+    //
+    // here we are figuring out which of the collector_wifi or the alternate names is correct if
+    // any.  If none are valid on the system then we should fail here so someone can fix the
+    // cfg.XXXX file
+    //
+    let valid_wifi_adapter_name = match get_valid_wifi_device_name(&kcf.config_data, wifi_adapters) {
+        Some(name) => name,
+        None => {
+            return Ok(Response::with((
+                status::Unauthorized,
+                "Failed to acquire network wifi adapter names. Check the cfg.xxxx file",
+            )))
+        },
+    };
+
+    println!("Found wifi device name to be valid {}", valid_wifi_adapter_name);
+
+    let wifi_settings = match get_network_settings(&kcf.config_data, &valid_wifi_adapter_name) {
         Some(settings) => settings,
         None => {
             return Ok(Response::with((
                 status::Unauthorized,
-                "Failed to acquire network settings from ethernet adapter.",
+                "Failed to acquire network settings from wifi adapter.",
             )))
         },
     };
@@ -1105,6 +1140,25 @@ pub fn file_exists(filename: &str, fieldname: &str) -> Result<(), Error> {
         Err(Error::new(ErrorKind::Other, format!("file missing: {}", filename)))
     } else {
         Ok(())
+    }
+}
+
+// get valid network interface name from a list
+pub fn get_valid_wifi_device_name(config_data: &SmartDiagnosticsConfig, adapter_names: Vec<&str>) -> Option<String> {
+    let output = Command::new(&config_data.scripts.find_devices)
+        .args(&adapter_names)
+        .output()
+        .expect(&format!("failed to execute `{}`", config_data.scripts.find_devices));
+
+    let mut stdout = String::from_utf8(output.stdout).unwrap();
+    stdout = stdout.trim().to_string();
+
+    info!("get_valid_wifi_device_name: {}", stdout);
+
+    if "".to_string() == stdout {
+       None
+    } else {
+        Some(stdout)
     }
 }
 

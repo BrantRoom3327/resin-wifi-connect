@@ -13,5 +13,5 @@ else
     export ETH0="enp1s0"
     export ETH1="enp2s0"
     export WLAN0="wlp4s0"
-    export WLAN1="wlx74da38db36c3"
+    export WLAN1="wlp0s21f0u4"
 fi

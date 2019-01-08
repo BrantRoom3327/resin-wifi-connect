@@ -201,7 +201,7 @@ pub fn start_server(
         auth_file_path,
         auth_data,
         ethernet_static_network_settings: NetworkSettings::new("invalid".to_string()),
-        wifi_network_settings: WifiSettings::new("invalid".to_string()),  //do we know the network interface name yet?
+        wifi_network_settings: WifiSettings::new("invalid".to_string()),
         shutting_down: false,
         proxy_settings: ProxySettings::new(),
     };

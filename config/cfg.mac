@@ -5,9 +5,10 @@
   "cookie_key": "655A6F61795598A5B55C71D6C2BB17983AA38F6C8418DBCAB9572660E6567DA6",
   "network_interfaces": {
     "collector_ethernet": "en0",
-    "collector_wifi": "en4",
+    "collector_wifi": "blah-invalid",
     "static_streaming_ethernet": "en1",
-    "hotspot": "en0"
+    "hotspot": "en0",
+    "wifi_alternate_adapter_names": [ "en4", "wlp0s21f0u2", "wlp0s21f0u1" ]
   },
   "output_files": {
     "configure_networking": "config/configure-networking.sh",
@@ -20,7 +21,8 @@
     "get_netmask": "kcf_scripts/get_netmask.sh",
     "reboot": "kcf_scripts/reboot.sh",
     "networking_stub": "kcf_scripts/networking-stub.sh",
-    "configure_connection": "kcf_scripts/configure_connection.sh"
+    "configure_connection": "kcf_scripts/configure_connection.sh",
+    "find_devices": "kcf_scripts/find_device.sh"
   },
   "templates_dir": "./ui/templates/",
   "exec_script_on_reboot": false
