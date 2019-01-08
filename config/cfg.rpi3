@@ -7,7 +7,8 @@
     "collector_ethernet": "eth0",
     "collector_wifi": "wlan1",
     "static_streaming_ethernet": "eth1",
-    "hotspot": "wlan0"
+    "hotspot": "wlan0",
+    "wifi_alternate_adapter_names": [ "wlp0s21f0u3", "wlp0s21f0u2", "wlp0s21f0u1" ]
   },
   "output_files": {
     "configure_networking": "/data/configure-networking.sh",
@@ -21,7 +22,7 @@
     "reboot": "/usr/src/app/kcf_scripts/reboot.sh",
     "networking_stub": "/usr/src/app/kcf_scripts/networking-stub.sh",
     "configure_connection": "/usr/src/app/kcf_scripts/configure_connection.sh",
-    "find_device": "/usr/src/app/kcf_scripts/find_device.sh"
+    "find_devices": "/usr/src/app/kcf_scripts/find_device.sh"
   },
   "templates_dir": "/usr/src/app/ui/templates/",
   "exec_script_on_reboot": false

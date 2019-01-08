@@ -741,7 +741,7 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
         },
     };
 
-    println!("Found wifi device name to be valid {}", valid_wifi_adapter_name);
+    println!("valid wifi adapter name found: {}", valid_wifi_adapter_name);
 
     let wifi_settings = match get_network_settings(&kcf.config_data, &valid_wifi_adapter_name) {
         Some(settings) => settings,
@@ -1153,7 +1153,7 @@ pub fn get_valid_wifi_device_name(config_data: &SmartDiagnosticsConfig, adapter_
     let mut stdout = String::from_utf8(output.stdout).unwrap();
     stdout = stdout.trim().to_string();
 
-    info!("get_valid_wifi_device_name: {}", stdout);
+    //info!("get_valid_wifi_device_name: {}", stdout);
 
     if "".to_string() == stdout {
        None
