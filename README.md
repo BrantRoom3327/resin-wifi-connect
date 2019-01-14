@@ -1,108 +1,98 @@
-WiFi Connect
+Altered Wifi-Connect
 ============
 
-> Easy WiFi setup for Linux devices from your mobile phone or laptop
+As a starting point.  Get yourself familiar with the app this application is based on.  
 
-WiFi Connect is a utility for dynamically setting the WiFi configuration on a Linux device via a captive portal. If the device's WiFi credentials have not been previously configured, or if the device cannot connect using the given credentials, WiFi Connect will create a wireless access point with a captive portal. New WiFi credentials can be specified by connecting to the access point with a laptop or mobile phone.
+[resin-wifi-connect](https://github.com/resin-io/resin-wifi-connect)
 
-[![Current Release](https://img.shields.io/github/release/resin-io/resin-wifi-connect.svg?style=flat-square)](https://github.com/resin-io/resin-wifi-connect/releases/latest)
-[![CircleCI status](https://img.shields.io/circleci/project/github/resin-io/resin-wifi-connect.svg?style=flat-square)](https://circleci.com/gh/resin-io/resin-wifi-connect)
-[![License](https://img.shields.io/github/license/resin-io/resin-wifi-connect.svg?style=flat-square)](https://github.com/resin-io/resin-wifi-connect/blob/master/LICENSE)
-[![Issues](https://img.shields.io/github/issues/resin-io/resin-wifi-connect.svg?style=flat-square)](https://github.com/resin-io/resin-wifi-connect/issues)
+The application essentially offers a wifi hotspot, with configuration for the network adapters on the system that will be applied after reboot.  The configuration is done via a webpage, which is served on the network running the hotspot.
 
-<div align="center">
-  <sub>an open source :satellite: project by <a href="https://resin.io">resin.io</a></sub>
-</div>
+Configuration
+-------------
+There are a couple configuration files to make sure are setup the way you want for the system you are targeting.  These files are:
 
-***
-   
-[**Download**][DOWNLOAD] | [**How it works**](#how-it-works) | [**How to use**](#how-to-use) | [**Support**](#support) | [**Roadmap**][MILESTONES]
+* data/cfg.json
+* config/auth.json
+* scripts/start.sh
+* Dockerfile.template
 
-[DOWNLOAD]: https://github.com/resin-io/resin-wifi-connect/releases/latest
-[MILESTONES]: https://github.com/resin-io/resin-wifi-connect/milestones
+cfg.json
+--------
+This file contains the network interface names and output file names (rewritten script files using network interface names) that will be used at runtime to configure the way the system will startup.
 
-![How it works](./docs/images/how-it-works.png?raw=true)
+It also contains settings related to the proxy server used by the SD Collector talk to the outside.
 
-How it works
+The top level keys you should be considering for your system are:
+
+* "network_interfaces"
+* "output_files"
+
+For each of these groups the important keys are:
+
+* "collector\_ethernet" - the ethernet interface (e.g. eth0) the collector will use to send data to the cloud or internal network.
+* "collector\_wifi" - The wifi interface (e.g. wlan1) the sd collector will use to send data to the cloud or internal network.
+* "static\_streaming\_ethernet" - The network interface used to stream data from sensors inside the installation.  This interface does not change its settings.  192.168.151.100
+
+The same set of keys as above exist inside the "output_files" section.  Those output files must point to files in the /data/ directory as that is where resin.io stores persistent data for containers after rebooting devices.  /data/ is also the directory that the wifi-connect app looks for scripts to configure the network interface on startup.
+
+auth.json
+----------
+This file contains a simple set of 'username' and 'password'.  The values given here are loaded at startup and used to authorize access to the configuration page.  They can be changed only at startup. 
+
+start.sh
+---------
+This file is only used in production builds (below).  It contains all the commands that will be run when the container launches.  Make sure it is starting the wifi-connect app and exporting the path to dbus as needed by the application so that it can use NetworkMangager at runtime.
+
+Dockerfile.template
+-------------------
+This file is only used in production builds (below).
+Ensure the correct executable for your architecture is included in the docker container.  The cargo build outputs files into the ./target folder and is separated by architecture.
+
+Basic Alterations to Wifi-Connect
+---------------------------------
+First inspect Dockerfile.template.  This is the file that gets launched by docker (Balena) when the container starts.
+
+When the container loads for the first time and the start.sh script is executed as part of the Dockerfile.template file there is a one\_time\_setup.sh script that is run and stored in the /data/ directory of the container.  The one\_time\_setup.sh script tries to setup the container with network connection names that match the names of the adapters on the system.   It does not work for all of them right now but tries for the ethernet connections as of right now.
+
+The wifi-connect application will run a hot spot called 'QuarterMaster' and you must connect to it to configure the network setup.  Once the user chooses which network interface (ethernet vs wifi) and the settings for that are validated the script is generated that is in charge of configuring the connection.
+
+The script will have the parameters the user entered as well as some commands to disable connections that should not be in use.  For example, when ethernet static is setup, the wifi connection will be disabled (not the hot spot wifi) so as to avoid conflicts with configuration and routing priority conflicts.  
+
+The script that will run configuration of network interfaces is written to the /data/ folder in the container and run before reboot.  The settings should take effect on the next reboot.  The hotspot should always be available to reconfigure the connection so long as the container is available and can get to the internet.
+
+
+Building
 ------------
 
-WiFi Connect interacts with NetworkManager, which should be the active network manager on the device's host OS.
+### 1. For local testing
 
-### 1. Scan
+```
+# ./build.sh
+```
 
-If a connection cannot be made WiFi Connect scans for available WiFi networks.
+This will build the application for x86_64 and run it.  The wifi hotspot will run on your local pc
 
-### 2. Access Point
+### 2. For production
 
-WiFi Connect opens an access point with a captive portal. Connecting to this access point with a laptop or mobile phone allows new WiFi credentials to be configured.
+The -p is for production.
 
-### 3. Connect
+```
+# ./build.sh -p 
+```
 
-The access point SSID is, by default, `WiFi Connect`. It can be changed by setting the `PORTAL_SSID` environment variable (see [this guide](https://docs.resin.io/management/env-vars/) for how to manage environment variables). By default, the network is unprotected, but a WPA2 passphrase can be added by setting the `PORTAL_PASSPHRASE` environment variable.
+Pushing builds to Balena
+------------------------
+Changes to the deployed resin image do not take effect for your resin app unless you push a new commit to resin.  At which point the docker container in Dockerfile.template is built.
 
-Connect to the opened access point on the device from your mobile phone or laptop. After connecting to the access point from a mobile phone, it will detect the captive portal and open its web page. Opening any web page will redirect to the captive portal as well.
+Steps to pushing a new build:
 
-### 4. Captive Portal
+* Make source code changes
+* ```# ./build.sh -p```
+* ```git add``` the source code and the target/.../wifi-connect binary to the reponsitory.
+* ```git commit -m "my message"```
+* ```git push balena master```
 
-After connecting to the access point, WiFi Connect will open a captive portal, which provides the option to select a WiFi SSID and passphrase for the desired network.
-
-### 5. Internet
-
-When the network credentials have been entered, WiFi Connect will disable the access point and try to connect to the network. If the connection fails, it will enable the access point for another attempt. If it succeeds, the configuration will be saved by NetworkManager.
-
----
-
-By default, WiFi Connect will not attempt to enter access point mode if a successful network connection has been made before. If the device is moved to a new network, it will continue trying to connect to the previous network. The user application is responsible for specifying an appropriate condition for returning to access point mode. This could be "offline for more than 1 day", "user pushed the reset button", or any other actionable state. To re-enter access point mode, the application should run the command `wifi-connect --clear=true`.
-
-For a complete list of command line arguments and environment variables check out our [command line arguments](./docs/command-line-arguments.md) guide.
-
-The full application flow is illustrated in the [state flow diagram](./docs/state-flow-diagram.md).
-
-***
-
-How to use
-----------
-
-WiFi Connect is designed to be integrated with a [resin.io](http://resin.io) application. (New to resin.io? Check out the [Getting Started Guide](http://docs.resin.io/#/pages/installing/gettingStarted.md).) This integration is accomplished through the use of two shared files:
-- The [Dockerfile template](./Dockerfile.template) manages dependencies. The example included here has everything necessary for WiFi Connect. Application dependencies need to be added. For help with Dockerfiles, take a look at this [guide](https://docs.resin.io/deployment/dockerfile/).
-- The [start script](./start) should contain the commands that run the application. Adding these commands after [line 5](./start#L5) will ensure that everything kicks off after WiFi is correctly configured. 
-An example of using WiFi Connect in a Python project can be found [here](https://github.com/resin-io-projects/resin-wifi-connect-example).
-
-***
-
-Supported boards / dongles
---------------------------
-
-WiFi Connect has been successfully tested using the following WiFi dongles:
-
-Dongle                                     | Chip
--------------------------------------------|-------------------
-[TP-LINK TL-WN722N](http://bit.ly/1P1MdAG) | Atheros AR9271
-[ModMyPi](http://bit.ly/1gY3IHF)           | Ralink RT3070
-[ThePiHut](http://bit.ly/1LfkCgZ)          | Ralink RT5370
-
-It has also been successfully tested with the onboard WiFi on a Raspberry Pi 3.
-
-Given these results, it is probable that most dongles with *Atheros* or *Ralink* chipsets will work.
-
-The following dongles are known **not** to work (as the driver is not friendly with access point mode or NetworkManager):
-
-* Official Raspberry Pi dongle (BCM43143 chip)
-* Addon NWU276 (Mediatek MT7601 chip)
-* Edimax (Realtek RTL8188CUS chip)
-
-Dongles with similar chipsets will probably not work.
-
-WiFi Connect is expected to work with all resin.io supported boards as long as they have the compatible dongles.
-
-***
-
-Support
--------
-
-If you're having any problem, please [raise an issue](https://github.com/resin-io/resin-wifi-connect/issues/new) on GitHub or [contact us](https://resin.io/community/), and the resin.io team will be happy to help.
-
-***
+At this point the builder for balena will run and if successful will push a new container up to resin.io for deploy on the hardware.
 
 License
 -------
