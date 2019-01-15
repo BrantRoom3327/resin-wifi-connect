@@ -91,7 +91,7 @@ fi
 #if we are disabling an interface just delete it
 if [ "$DISABLE" != "" ]; then
 
-    COMMANDS+=("nmcli con del $INTERFACE_NAME")
+    #COMMANDS+=("nmcli con del $INTERFACE_NAME")
     if [ "$ECHO_COMMANDS_ONLY" == "1" ]; then
         echo -e $COMMANDS
     else
