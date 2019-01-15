@@ -20,7 +20,7 @@ fi
 export ECHO_COMMANDS_ONLY=0
 
 kcf_scripts/configure_connection.sh --interface_name=en0 --disable=1
-kcf_scripts/configure_connection.sh --interface_type=wifi --method=static --interface_name=en4 --ssid=HouseOfDoon --psk=RRRR  --ip_address=192.168.1.123 --gateway=192.168.1.1  --dns_entries='8.8.8.8 '  --metric=1
+kcf_scripts/configure_connection.sh --interface_type=wifi --method=static --interface_name=blah-invalid --ssid=HouseOfDoon --psk=asfasdfasdf  --ip_address=192.168.1.123 --gateway=192.168.1.1  --dns_entries='8.8.8.8 '  --metric=1
 kcf_scripts/configure_connection.sh --interface_type=ethernet --method=static --interface_name=en1 --ip_address=192.168.151.100 --gateway=192.168.151.100  --dns_entries='8.8.8.8 ' 
 
 kcf_scripts/reboot.sh
