@@ -484,6 +484,8 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
     if network_configuration_type == NetworkCfgType::Ethernet_DHCP {
         // configure ethernet for dhcp
         ethernet_settings.dhcp_enabled = true;
+    } else if network_configuration_type == NetworkCfgType::Wifi_DHCP {
+        wifi_settings.settings.dhcp_enabled = true;
     }
     else if network_configuration_type == NetworkCfgType::Ethernet_Static {
 

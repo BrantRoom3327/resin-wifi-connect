@@ -328,9 +328,21 @@ pub fn collect_set_config_options(req: &mut Request) -> IronResult<SetConfigOpti
     //see NetworkCfgType for the allowed values.
     let network_configuration_type = get_param!(params, "network_configuration_type", u8);
 
+    let chosen_network_configuration : Option<NetworkCfgType> = get_network_cfg_type(network_configuration_type);
+
+    //depending on configuration type, take the ssid and passphrase from a different field (dhcp vs
+    //static wifi)
+    let wifi_ssid;
+    let wifi_passphrase;
+    if chosen_network_configuration == Some(NetworkCfgType::Wifi_DHCP) {
+        wifi_ssid = get_param!(params, "wifi_ssid_dhcp", String);
+        wifi_passphrase = get_param!(params, "wifi_passphrase_dhcp", String);
+    } else  { //wifi_static
+        wifi_ssid = get_param!(params, "wifi_ssid", String);
+        wifi_passphrase = get_param!(params, "wifi_passphrase", String);
+    }
+
     // settings
-    let wifi_ssid = get_param!(params, "wifi_ssid", String);
-    let wifi_passphrase = get_param!(params, "wifi_passphrase", String);
     let wifi_ip_address = get_param!(params, "wifi_ip_address", String);
     let wifi_subnet_mask = get_param!(params, "wifi_subnet_mask", String);
     let wifi_gateway = get_param!(params, "wifi_gateway", String);
