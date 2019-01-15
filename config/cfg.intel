@@ -25,5 +25,5 @@
     "find_devices": "/usr/src/app/kcf_scripts/find_device.sh"
   },
   "templates_dir": "/usr/src/app/ui/templates/",
-  "exec_script_on_reboot": true
+  "exec_script_on_reboot": false 
 }
