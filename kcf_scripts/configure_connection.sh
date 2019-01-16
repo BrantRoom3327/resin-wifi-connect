@@ -90,8 +90,7 @@ fi
 
 #if we are disabling an interface just delete it
 if [ "$DISABLE" != "" ]; then
-
-    #COMMANDS+=("nmcli con del $INTERFACE_NAME")
+    COMMANDS+=("nmcli con del $INTERFACE_NAME")
     if [ "$ECHO_COMMANDS_ONLY" == "1" ]; then
         echo -e $COMMANDS
     else
@@ -109,7 +108,7 @@ if [ "$METHOD" == "dhcp" ]; then
         COMMANDS+=("nmcli con add type $INTERFACE_TYPE con-name $INTERFACE_NAME ifname $INTERFACE_NAME")
     elif [ "$INTERFACE_TYPE" == "wifi" ]; then
         COMMANDS+=("nmcli con del $INTERFACE_NAME")
-        COMMANDS+=("nmcli dev wifi connect '$SSID' password '$PSK' ifname $INTERFACE_NAME")
+        COMMANDS+=("nmcli dev wifi connect '$SSID' password '$PSK' ifname $INTERFACE_NAME con-name $INTERFACE_NAME")
     fi
 fi
 
@@ -119,10 +118,8 @@ if [ "$METHOD" == "static" ]; then
         COMMANDS+=("nmcli con add type $INTERFACE_TYPE con-name $INTERFACE_NAME ifname $INTERFACE_NAME ip4 $IP_ADDRESS/24 gw4 $GATEWAY")
         COMMANDS+=("nmcli con mod $INTERFACE_NAME ipv4.dns '$DNS_ENTRIES'")
     elif [ "$INTERFACE_TYPE" == "wifi" ]; then
-       # COMMANDS+=("nmcli con del $INTERFACE_NAME")
-       # COMMANDS+=("nmcli con add type $INTERFACE_TYPE con-name $INTERFACE_NAME ifname $INTERFACE_NAME ssid '$SSID' ip4 $IP_ADDRESS/24 gw4 $GATEWAY")
-        COMMANDS+=("nmcli con mod $INTERFACE_NAME ssid '$SSID'")
-        COMMANDS+=("nmcli con mod $INTERFACE_NAME ip4 $IP_ADDRESS/24 gw4 $GATEWAY")
+        COMMANDS+=("nmcli con del $INTERFACE_NAME")
+        COMMANDS+=("nmcli con add type $INTERFACE_TYPE con-name $INTERFACE_NAME ifname $INTERFACE_NAME ssid '$SSID' ip4 $IP_ADDRESS/24 gw4 $GATEWAY")
         COMMANDS+=("nmcli con mod $INTERFACE_NAME wifi-sec.key-mgmt wpa-psk")
         COMMANDS+=("nmcli con mod $INTERFACE_NAME wifi-sec.psk '$PSK'")
     fi
