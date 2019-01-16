@@ -47,6 +47,13 @@ bus = dbus.SystemBus()
 proxy = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
 settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings")
 
+def reactivate(interface_name="eth0"):
+    bus = dbus.SystemBus()
+    proxy = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
+    nm = dbus.Interface(proxy, "org.freedesktop.NetworkManager")
+    devpath = nm.GetDeviceByIpIface(interface_name)
+    nm.ActivateConnection('/', devpath, '/')
+
 for c_path in settings.ListConnections():
     c_proxy = bus.get_object("org.freedesktop.NetworkManager", c_path)
     c_obj = dbus.Interface(c_proxy, "org.freedesktop.NetworkManager.Settings.Connection")
@@ -79,6 +86,8 @@ for c_path in settings.ListConnections():
 
     # Save all the updated settings back to NetworkManager
     c_obj.Update(c_settings)
+    reactivate("resin-wifi-01")
+    reactivate("wlp0s21f0u4")
     break
 
 sys.exit(0)
