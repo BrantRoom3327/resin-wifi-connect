@@ -86,8 +86,8 @@ for c_path in settings.ListConnections():
 
     # Save all the updated settings back to NetworkManager
     c_obj.Update(c_settings)
-    reactivate("resin-wifi-01")
-    reactivate("wlp0s21f0u4")
+    #update (reactivate) the connection
+    reactivate("wlp0s21f0u4")  #FIXME: if we need this pass it in
     break
 
 sys.exit(0)

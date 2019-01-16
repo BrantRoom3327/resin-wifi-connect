@@ -10,7 +10,9 @@ nmcli con mod $ETH0 ipv4.route-metric 1
 #eth1, static
 nmcli con add con-name $ETH1 ifname $ETH1 type ethernet ip4 192.168.151.100/24 gw4 192.168.151.100
 
-#disable the wired connection as preferred, we want to bring up the $ETH0 interface as default in place of it
-#will this be possible to switch at startup?
+#disable these connections, we will recreate connections that follow the exact device name
+#the resin-wifi-01 connection causes issues on reboot trying to modify it, settings don't stick
+#so for now tell nmcli to never use it
 nmcli con mod "Wired connection 1" ipv4.never-default true
+#nmcli con mod "resin-wifi-01" ipv4.never-default true
 
