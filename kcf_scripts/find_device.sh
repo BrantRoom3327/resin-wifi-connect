@@ -12,10 +12,6 @@ fi
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
 
-    #trying something out
-    echo "resin-wifi-01"
-    exit 0
-
     #gather a list of all valid system device
     system_devices=$(nmcli d | awk '{print $1}') 
     for dev in $*; 
