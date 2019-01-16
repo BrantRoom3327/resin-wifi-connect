@@ -4,7 +4,7 @@ ENV INITSYSTEM on
 
 RUN apt-get update
 
-RUN apt-get install -y dnsmasq wireless-tools vim file udhcpd network-manager \
+RUN apt-get install -y dnsmasq wireless-tools vim file udhcpd network-manager python-dbus \
     && systemctl mask NetworkManager.service \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
