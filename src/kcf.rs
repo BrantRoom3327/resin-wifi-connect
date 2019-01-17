@@ -486,6 +486,18 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
         ethernet_settings.dhcp_enabled = true;
     } else if network_configuration_type == NetworkCfgType::Wifi_DHCP {
         wifi_settings.settings.dhcp_enabled = true;
+
+        let valid_wifi_adapter_name = match search_for_wifi_adapter_name(&kcf.config_data) {
+            Some(name) => name,
+            None => {
+                return Ok(Response::with((
+                    status::Unauthorized,
+                    "Could not find a valid wifi adapter name in the configuration vs system"
+                )))
+            }
+        };
+
+        wifi_settings.settings.adapter_name = valid_wifi_adapter_name;
     }
     else if network_configuration_type == NetworkCfgType::Ethernet_Static {
 
@@ -616,8 +628,20 @@ pub fn http_route_set_config(req: &mut Request) -> IronResult<Response> {
             ));
         }
 
+        let valid_wifi_adapter_name = match search_for_wifi_adapter_name(&kcf.config_data) {
+            Some(name) => name,
+            None => {
+                return Ok(Response::with((
+                    status::Unauthorized,
+                    "Could not find a valid wifi adapter name in the configuration vs system"
+                )))
+            }
+        };
+
+        println!("Is this the correct network name for settings? {}", valid_wifi_adapter_name);
+
         wifi_settings.settings = NetworkSettings {
-            adapter_name: config_data.network_interfaces.collector_wifi.to_string(),
+            adapter_name: valid_wifi_adapter_name,
             dhcp_enabled: false,
             ip_address: valid_ip_address,
             netmask: valid_netmask,
@@ -720,27 +744,14 @@ pub fn http_route_get_config(req: &mut Request) -> IronResult<Response> {
         },
     };
 
-    //create a list of collector_wifi adapters and the alternates from the config data for a single
-    //list to search
-    let mut wifi_adapters: Vec<&str> = Vec::new();
-    wifi_adapters.push(&kcf.config_data.network_interfaces.collector_wifi);
-    for i in &kcf.config_data.network_interfaces.wifi_alternate_adapter_names {
-        wifi_adapters.push(&*i);
-    };
-
-    //
-    // here we are figuring out which of the collector_wifi or the alternate names is correct if
-    // any.  If none are valid on the system then we should fail here so someone can fix the
-    // cfg.XXXX file
-    //
-    let valid_wifi_adapter_name = match get_valid_wifi_device_name(&kcf.config_data, wifi_adapters) {
+    let valid_wifi_adapter_name = match search_for_wifi_adapter_name(&kcf.config_data) {
         Some(name) => name,
         None => {
             return Ok(Response::with((
                 status::Unauthorized,
-                "Failed to acquire network wifi adapter names. Check the cfg.xxxx file",
+                "Could not find a valid wifi adapter name in the configuration vs system"
             )))
-        },
+        }
     };
 
     println!("valid wifi adapter name found: {}", valid_wifi_adapter_name);
@@ -866,6 +877,29 @@ pub fn http_route_get_status(req: &mut Request) -> IronResult<Response> {
     resp.set_mut(Template::new(HTTP_STATUS_TEMPLATE, template_json))
         .set_mut(status::Ok);
     Ok(resp)
+}
+
+pub fn search_for_wifi_adapter_name(config_data: &SmartDiagnosticsConfig) -> Option<String> {
+
+    //create a list of collector_wifi adapters and the alternates from the config data for a single
+    //list to search
+    let mut wifi_adapters: Vec<&str> = Vec::new();
+    wifi_adapters.push(&config_data.network_interfaces.collector_wifi);
+    for i in &config_data.network_interfaces.wifi_alternate_adapter_names {
+        wifi_adapters.push(&*i);
+    };
+
+    //
+    // here we are figuring out which of the collector_wifi or the alternate names is correct if
+    // any.  If none are valid on the system then we should fail here so someone can fix the
+    // cfg.XXXX file
+    //
+    let valid_wifi_adapter_name = match get_valid_wifi_device_name(&config_data, wifi_adapters) {
+        Some(name) => name,
+        None => return None,
+    };
+
+    Some(valid_wifi_adapter_name)
 }
 
 pub fn get_network_settings(config_data: &SmartDiagnosticsConfig, adapter_name: &str) -> Option<NetworkSettings> {

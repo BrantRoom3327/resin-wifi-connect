@@ -146,7 +146,8 @@ fi
 #it on the system so it doesn't try to take over.
 if [ "$INTERFACE_TYPE" == "wifi" ]; then
    COMMANDS+=("nmcli con mod resin-wifi-01 ipv4.never-default true")
-   COMMANDS+=("nmcli con up $INTERFACE_NAME")  #apply the settings or they will NOT stick on reboot
+   #don't bring the connection up, just leave it for the next reboot cycle, hopefully the new connection will get priority
+   #COMMANDS+=("nmcli con up $INTERFACE_NAME")  #apply the settings or they will NOT stick on reboot
 fi
 
 #send commands to output or just run them
